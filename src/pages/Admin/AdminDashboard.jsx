@@ -1,11 +1,24 @@
 import { Users, Activity, FileSpreadsheet } from 'lucide-react';
 
+import { useState, useEffect } from 'react';
+
 function AdminDashboard() {
-  const stats = [
-    { title: 'Total Accounts', value: '1,248', icon: <Users size={24} color="#60a5fa" />, trend: '+12% this week' },
-    { title: 'Active Students', value: '342', icon: <Activity size={24} color="#34d399" />, trend: 'Live right now' },
-    { title: 'Tests Generated', value: '56', icon: <FileSpreadsheet size={24} color="#c084fc" />, trend: '+3 today' }
-  ];
+  const [stats, setStats] = useState([
+    { title: 'Total Accounts', value: '0', icon: <Users size={24} color="#60a5fa" />, trend: 'System live' },
+    { title: 'Active Students', value: '0', icon: <Activity size={24} color="#34d399" />, trend: 'Live right now' },
+    { title: 'Tests Generated', value: '0', icon: <FileSpreadsheet size={24} color="#c084fc" />, trend: 'Ready' }
+  ]);
+
+  useEffect(() => {
+    const users = JSON.parse(localStorage.getItem('airlab_registered_users') || '[]');
+    const tests = JSON.parse(localStorage.getItem('jee_ai_tests') || '[]');
+    
+    setStats([
+      { title: 'Total Accounts', value: users.length.toString(), icon: <Users size={24} color="#60a5fa" />, trend: 'All registered users' },
+      { title: 'Active Students', value: users.filter(u => u.status === 'Active').length.toString(), icon: <Activity size={24} color="#34d399" />, trend: 'Currently active' },
+      { title: 'Tests Generated', value: tests.length.toString(), icon: <FileSpreadsheet size={24} color="#c084fc" />, trend: 'AI generated papers' }
+    ]);
+  }, []);
 
   return (
     <div>
