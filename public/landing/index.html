@@ -908,20 +908,43 @@
             .then(userInfo => {
               console.log('Google User Info:', userInfo);
               // Handle custom logic here (e.g. create account, sync to DB)
+              // Handle custom logic here (e.g. create account, sync to DB)
               
               const registeredUsers = JSON.parse(localStorage.getItem('airlab_registered_users') || '[]');
               const isRegistered = registeredUsers.some(u => u.email === userInfo.email);
               
-              if (!isRegistered) {
-                alert("Account not found. Please contact the administrator to create your account before logging in.");
-                return;
+              if (currentAuthMode === 'signin') {
+                if (!isRegistered) {
+                  alert("Account not found. Please click 'Sign Up' first to register.");
+                  return;
+                }
+              } else if (currentAuthMode === 'signup') {
+                if (isRegistered) {
+                  alert("You are already registered! Please use 'Sign In' instead.");
+                  return;
+                }
+                
+                const nameField = document.getElementById('signup-name').value;
+                const clsField = document.getElementById('signup-class').value;
+                
+                // Add to Admin Panel
+                registeredUsers.push({
+                  id: Date.now(),
+                  name: nameField || userInfo.name,
+                  email: userInfo.email,
+                  status: 'Active',
+                  testsGiven: 0,
+                  avgScore: 'N/A',
+                  joinDate: new Date().toISOString().split('T')[0]
+                });
+                localStorage.setItem('airlab_registered_users', JSON.stringify(registeredUsers));
               }
               
               const name = document.getElementById('signup-name').value;
               const cls = document.getElementById('signup-class').value;
               
               const userObj = {
-                name: userInfo.name,
+                name: (currentAuthMode === 'signup' && name) ? name : (registeredUsers.find(u => u.email === userInfo.email)?.name || userInfo.name),
                 email: userInfo.email,
                 picture: userInfo.picture,
                 class: (name && cls) ? cls : 'N/A'
@@ -1014,14 +1037,18 @@
     const btnNext = document.getElementById('btn-next-step');
     const btnBack = document.getElementById('btn-back-step');
 
+    let currentAuthMode = 'signin';
+
     function openModal(type) {
       viewSignin.classList.add('hidden');
       viewSignup1.classList.add('hidden');
       viewSignup2.classList.add('hidden');
 
       if (type === 'signin') {
+        currentAuthMode = 'signin';
         viewSignin.classList.remove('hidden');
       } else if (type === 'signup') {
+        currentAuthMode = 'signup';
         viewSignup1.classList.remove('hidden');
       }
 
