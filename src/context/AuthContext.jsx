@@ -46,8 +46,8 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('airlab_user');
     setCurrentUser(null);
-    // Redirect back to login page
-    window.location.href = "/login";
+    // Redirect back to landing page
+    window.location.href = "/landing/";
   };
 
   const login = (userData) => {

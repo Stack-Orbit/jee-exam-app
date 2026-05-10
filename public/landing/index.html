@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE AIR LAB — JEE Advanced Test Series</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            academic: '#0E5EFF',
+            cyan: '#2DA8FF',
+            emerald: '#5BBF9B',
+            mist: '#F8FBFF',
+            navy: '#07111F',
+          },
+          fontFamily: {
+            display: ['Bebas Neue','sans-serif'],
+            body: ['Inter','sans-serif'],
+            editorial: ['Playfair Display','serif'],
+            accent: ['Cormorant Garamond','serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{margin:0;padding:0;overflow-x:hidden;width:100%;position:relative}
+    body{font-family:'Inter',sans-serif;background:#F8FBFF;color:#1e293b}
+
+    /* Dark scrollbar — eliminates white strip on right */
+    html{scrollbar-width:thin;scrollbar-color:#1e3a5f #07111F}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:#07111F}
+    ::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:3px}
+
+    html.lenis, html.lenis body {height:auto}
+    .lenis.lenis-smooth {scroll-behavior:auto !important}
+    .lenis.lenis-smooth [data-lenis-prevent] {overscroll-behavior:contain}
+
+    /* Navigation — subtle permanent tint prevents glitch line */
+    #navbar{
+      background:linear-gradient(to bottom, rgba(7,17,31,0.45) 0%, rgba(7,17,31,0) 100%);
+    }
+    .nav-scrolled{
+      background:rgba(7,17,31,0.9);
+      backdrop-filter:blur(20px);
+    }
+    .nav-link{position:relative}
+    .nav-link::after{
+      content:'';position:absolute;bottom:-4px;left:0;width:0;height:1px;
+      background:#2DA8FF;transition:width 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    .nav-link:hover::after{width:100%}
+
+    /* Buttons */
+    .btn-pill{transition:all 0.4s cubic-bezier(0.16,1,0.3,1)}
+    .btn-pill:hover{box-shadow:0 0 30px rgba(45,168,255,0.35);transform:translateY(-2px)}
+    .btn-primary{
+      background:linear-gradient(135deg,#0E5EFF,#2DA8FF);
+      transition:all 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-primary:hover{box-shadow:0 0 50px rgba(45,168,255,0.5);transform:translateY(-2px)}
+    .btn-login{
+      background:rgba(255,255,255,0.95);
+      color:#07111F;
+      border:1px solid rgba(255,255,255,0.5);
+      transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-login:hover{
+      background:#2DA8FF;
+      color:#fff;
+      box-shadow:0 0 30px rgba(45,168,255,0.5);
+      transform:translateY(-2px);
+    }
+    .btn-outline-light{
+      background:transparent;
+      color:#fff;
+      border:1.5px solid rgba(255,255,255,0.25);
+      transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-outline-light:hover{
+      background:rgba(255,255,255,0.08);
+      border-color:rgba(255,255,255,0.45);
+      transform:translateY(-2px);
+    }
+
+    /* Cards */
+    .iit-card{
+      transition:all 0.6s cubic-bezier(0.16,1,0.3,1);
+      overflow:hidden;
+      border-radius:1rem;
+    }
+    .iit-card:hover{
+      transform:translateY(-10px) scale(1.02);
+      box-shadow:0 24px 48px rgba(0,0,0,0.14);
+    }
+    .iit-card img{transition:transform 0.8s cubic-bezier(0.16,1,0.3,1)}
+    .iit-card:hover img{transform:scale(1.1)}
+
+    .feature-item{
+      transition:all 0.5s cubic-bezier(0.16,1,0.3,1);
+      border-bottom:1px solid rgba(14,94,255,0.08);
+    }
+    .feature-item:hover{
+      transform:translateX(8px);
+      background:rgba(255,255,255,0.6);
+    }
+    .feature-icon{
+      box-shadow:0 0 24px rgba(45,168,255,0.2);
+      transition:box-shadow 0.4s ease;
+    }
+    .feature-item:hover .feature-icon{
+      box-shadow:0 0 32px rgba(45,168,255,0.35);
+    }
+
+    /* Gradient Border for Dark Cards */
+    .gradient-border{
+      position:relative;
+      background:rgba(255,255,255,0.03);
+      backdrop-filter:blur(20px);
+      transition:all 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    .gradient-border::before{
+      content:'';position:absolute;inset:0;border-radius:inherit;padding:1.5px;
+      background:linear-gradient(135deg,rgba(45,168,255,0.5),rgba(14,94,255,0.2),rgba(91,191,155,0.3));
+      -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+      -webkit-mask-composite:xor;mask-composite:exclude;
+      pointer-events:none;opacity:0.6;transition:opacity 0.4s ease;
+    }
+    .gradient-border:hover::before{opacity:1}
+    .gradient-border:hover{
+      transform:translateY(-8px);
+      background:rgba(255,255,255,0.06);
+    }
+
+    /* Reveal Animation Base */
+    .reveal{opacity:0;transform:translateY(40px)}
+    .reveal-left{opacity:0;transform:translateX(-40px)}
+    .reveal-scale{opacity:0;transform:scale(0.95)}
+
+    /* Form styling */
+    .form-input{
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.15);
+      transition:all 0.3s ease;
+    }
+    .form-input:focus{
+      outline:none;
+      border-color:#2DA8FF;
+      background:rgba(255,255,255,0.12);
+      box-shadow:0 0 20px rgba(45,168,255,0.15);
+    }
+
+    /* Hero specific */
+    .hero-container{
+      position:relative;
+      width:100%;
+      min-height:100vh;
+      overflow:hidden;
+      background:#07111F;
+    }
+    .hero-bg{
+      position:absolute;
+      inset:0;
+      z-index:1;
+    }
+    .hero-bg img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      object-position:center top;
+    }
+    .hero-vignette{
+      position:absolute;
+      inset:0;
+      z-index:2;
+      background:
+        radial-gradient(ellipse at center, transparent 0%, rgba(7,17,31,0.25) 100%),
+        linear-gradient(to bottom, rgba(7,17,31,0.2) 0%, rgba(7,17,31,0) 25%, rgba(7,17,31,0) 55%, rgba(7,17,31,0.95) 100%);
+      pointer-events:none;
+    }
+    .hero-content{
+      position:relative;
+      z-index:10;
+      min-height:100vh;
+      display:flex;
+      align-items:flex-end; /* pushes card to bottom */
+      padding-top:100px;
+      padding-bottom:100px; /* clears bottom bar */
+    }
+
+    /* COMPACT HERO CARD — bottom-left, no overlap */
+    .hero-card-panel{
+      position:relative;
+      background: linear-gradient(165deg, rgba(18, 45, 95, 0.6) 0%, rgba(7, 17, 31, 0.95) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 380px;
+      box-shadow:
+        0 24px 48px -12px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(45, 168, 255, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease;
+      overflow:hidden;
+    }
+    .hero-card-panel::before{
+      content:'';
+      position:absolute;
+      top:0; left:0; right:0;
+      height:1.5px;
+      background: linear-gradient(90deg, transparent 0%, rgba(45,168,255,0.5) 50%, transparent 100%);
+      opacity:0.7;
+    }
+    .hero-card-panel::after{
+      content:'';
+      position:absolute;
+      top:-50%; left:-50%;
+      width:200%; height:200%;
+      background: radial-gradient(circle at 50% 0%, rgba(45,168,255,0.08), transparent 60%);
+      pointer-events:none;
+    }
+    .hero-card-panel:hover{
+      transform: translateY(-4px);
+      box-shadow:
+        0 32px 64px -12px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(45, 168, 255, 0.12),
+        0 0 50px rgba(45, 168, 255, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    /* Bottom bar — no border-t to prevent glitch line */
+    .hero-bottom-bar{
+      position:absolute;
+      bottom:0;
+      left:0;
+      right:0;
+      z-index:20;
+      background:rgba(7,17,31,0.55);
+      backdrop-filter:blur(16px);
+    }
+
+    /* Cinematic text shadow */
+    .text-shadow-cinematic{
+      text-shadow:0 4px 30px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body class="antialiased">
+
+  <!-- Navigation — Clean edge-aligned -->
+  <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 px-5 md:px-10 py-5 transition-all duration-500">
+    <div class="w-full flex items-center justify-between">
+      <a href="#" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-academic to-cyan flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-cyan/20 group-hover:shadow-cyan/40 transition-shadow">A</div>
+        <span class="font-body text-sm font-semibold tracking-[0.25em] text-white uppercase">THE AIR LAB</span>
+      </a>
+      <div id="nav-auth-container">
+        <button class="px-7 py-2.5 rounded-full btn-login text-xs font-bold tracking-[0.1em] uppercase btn-open-signin">
+          Login
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ==================== HERO SECTION ==================== -->
+  <section class="hero-container">
+    
+    <!-- Background Plane -->
+    <div class="hero-bg" id="hero-bg-layer">
+      <img 
+        src="./rop cover (iit bombay text should move relative to scroll).png" 
+        alt="IIT Bombay Campus" 
+        id="hero-bg-img"
+      >
+    </div>
+
+    <!-- Cinematic Vignette -->
+    <div class="hero-vignette"></div>
+    <div class="absolute inset-0 z-[3] bg-gradient-to-r from-navy/25 via-transparent to-transparent pointer-events-none"></div>
+
+    <!-- Right Side: Target Top IITs — LOWERED -->
+    <div class="absolute right-6 md:right-12 top-[45%] -translate-y-1/2 z-20 hidden lg:block" id="hero-target">
+      <p class="font-display text-5xl md:text-6xl text-white/90 text-right leading-none mb-1 text-shadow-cinematic">TARGET</p>
+      <p class="font-display text-5xl md:text-6xl text-cyan text-right leading-none mb-1 text-shadow-cinematic">TOP</p>
+      <p class="font-display text-5xl md:text-6xl text-white/90 text-right leading-none text-shadow-cinematic">IITS !</p>
+    </div>
+
+    <!-- Foreground Card — Compact, bottom-left, no overlap -->
+    <div class="hero-content px-5 md:px-10">
+      <div class="w-full max-w-[380px]" id="hero-card">
+        <div class="hero-card-panel">
+          <p class="text-cyan text-[11px] font-bold tracking-[0.2em] uppercase mb-3 relative z-10">Login to Test</p>
+          <h2 class="font-display text-3xl md:text-4xl text-white leading-[0.95] mb-1 relative z-10">
+            LET'S UPGRADE TO THE
+          </h2>
+          <div class="flex items-center gap-3 mt-2 relative z-10">
+            <span class="text-2xl filter drop-shadow-lg">⚡</span>
+            <span class="font-display text-3xl md:text-4xl text-white tracking-wide">99% CLUB!</span>
+          </div>
+          <p class="mt-5 text-white/40 text-sm leading-relaxed font-light relative z-10">
+            The future of JEE preparation. Quiet confidence. Discipline. Results.
+          </p>
+          <div class="mt-6 flex flex-col md:flex-row gap-3 relative z-10" id="hero-auth-container">
+            <button class="px-6 py-2.5 bg-white text-navy rounded-full text-sm font-bold tracking-wider hover:bg-cyan hover:text-white transition-all duration-300 btn-pill w-full md:w-auto btn-open-signup">
+              SIGN UP
+            </button>
+            <button class="px-6 py-2.5 btn-outline-light rounded-full text-sm font-bold tracking-wider w-full md:w-auto btn-open-signin">
+              SIGN IN
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Info Bar — no border, gradient bg only -->
+    <div class="hero-bottom-bar">
+      <div class="max-w-7xl mx-auto px-6 md:px-12 py-4 flex justify-around items-center">
+        <div class="flex items-center gap-3">
+          <svg class="w-5 h-5 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span class="text-white/60 text-xs tracking-[0.15em] uppercase font-medium">Real Exam Experience</span>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <svg class="w-5 h-5 text-emerald" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605"/></svg>
+          <span class="text-white/60 text-xs tracking-[0.15em] uppercase font-medium">Smart Preparation</span>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <svg class="w-5 h-5 text-academic" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+          <span class="text-white/60 text-xs tracking-[0.15em] uppercase font-medium">Better Performance</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 01: WHY CHOOSE ==================== -->
+  <section id="features" class="relative py-24 md:py-32 overflow-hidden" style="background:linear-gradient(180deg,#F8FBFF 0%,#EDF5FF 50%,#F8FBFF 100%)">
+    <div class="max-w-7xl mx-auto px-6 md:px-12">
+      <div class="mb-20 reveal">
+        <p class="text-cyan text-xs font-bold tracking-[0.2em] uppercase mb-4">Why Choose</p>
+        <h2 class="font-display text-5xl md:text-7xl text-academic leading-[0.9] mb-2">
+          THE AIR LAB
+        </h2>
+        <h3 class="font-display text-3xl md:text-5xl text-slate-400 leading-tight">
+          TEST SERIES FOR JEE ?
+        </h3>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-16 items-start">
+        <!-- Features List -->
+        <div class="space-y-0">
+          <div class="feature-item flex items-start gap-6 py-7 px-5 rounded-2xl cursor-pointer reveal-left">
+            <div class="w-14 h-14 rounded-full bg-academic/10 flex items-center justify-center feature-icon flex-shrink-0">
+              <svg class="w-6 h-6 text-academic" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            </div>
+            <div class="pt-1">
+              <div class="flex items-center gap-3 mb-1">
+                <span class="text-cyan text-xs font-bold tracking-wider">01</span>
+                <div class="h-px w-8 bg-cyan/30"></div>
+              </div>
+              <h4 class="font-body text-lg font-semibold text-slate-800 mb-1">Best Quality Updated PYQs</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">Meticulously curated previous year questions with detailed solutions by IITians.</p>
+            </div>
+          </div>
+
+          <div class="feature-item flex items-start gap-6 py-7 px-5 rounded-2xl cursor-pointer reveal-left">
+            <div class="w-14 h-14 rounded-full bg-emerald/10 flex items-center justify-center feature-icon flex-shrink-0">
+              <svg class="w-6 h-6 text-emerald" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="pt-1">
+              <div class="flex items-center gap-3 mb-1">
+                <span class="text-cyan text-xs font-bold tracking-wider">02</span>
+                <div class="h-px w-8 bg-cyan/30"></div>
+              </div>
+              <h4 class="font-body text-lg font-semibold text-slate-800 mb-1">Most Affordable & Reliable</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">Premium quality at a price that respects every student's journey.</p>
+            </div>
+          </div>
+
+          <div class="feature-item flex items-start gap-6 py-7 px-5 rounded-2xl cursor-pointer reveal-left">
+            <div class="w-14 h-14 rounded-full bg-academic/10 flex items-center justify-center feature-icon flex-shrink-0">
+              <svg class="w-6 h-6 text-academic" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.499 5.221 69.78 69.78 0 00-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5"/></svg>
+            </div>
+            <div class="pt-1">
+              <div class="flex items-center gap-3 mb-1">
+                <span class="text-cyan text-xs font-bold tracking-wider">03</span>
+                <div class="h-px w-8 bg-cyan/30"></div>
+              </div>
+              <h4 class="font-body text-lg font-semibold text-slate-800 mb-1">Designed by IITians</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">Crafted by those who have lived the dream and cracked the code.</p>
+            </div>
+          </div>
+
+          <div class="feature-item flex items-start gap-6 py-7 px-5 rounded-2xl cursor-pointer reveal-left">
+            <div class="w-14 h-14 rounded-full bg-cyan/10 flex items-center justify-center feature-icon flex-shrink-0">
+              <svg class="w-6 h-6 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/></svg>
+            </div>
+            <div class="pt-1">
+              <div class="flex items-center gap-3 mb-1">
+                <span class="text-cyan text-xs font-bold tracking-wider">04</span>
+                <div class="h-px w-8 bg-cyan/30"></div>
+              </div>
+              <h4 class="font-body text-lg font-semibold text-slate-800 mb-1">Fully Copied NTA Interface</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">Replicate the exact official exam environment. Zero surprises on D-Day.</p>
+            </div>
+          </div>
+
+          <div class="feature-item flex items-start gap-6 py-7 px-5 rounded-2xl cursor-pointer reveal-left">
+            <div class="w-14 h-14 rounded-full bg-academic/10 flex items-center justify-center feature-icon flex-shrink-0">
+              <svg class="w-6 h-6 text-academic" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>
+            </div>
+            <div class="pt-1">
+              <div class="flex items-center gap-3 mb-1">
+                <span class="text-cyan text-xs font-bold tracking-wider">05</span>
+                <div class="h-px w-8 bg-cyan/30"></div>
+              </div>
+              <h4 class="font-body text-lg font-semibold text-slate-800 mb-1">Best-in-Class Experience</h4>
+              <p class="text-slate-500 text-sm leading-relaxed">Premium interface, intelligent analytics, and seamless performance.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento Grid — User's IIT Images -->
+        <div class="grid grid-cols-2 gap-4" id="iits">
+          <div class="iit-card aspect-[4/3] relative group cursor-pointer reveal-scale">
+            <img src="./iit bombay.jpg" class="w-full h-full object-cover" alt="IIT Bombay">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-5 left-5 right-5">
+              <p class="font-display text-2xl text-white tracking-wide">IIT BOMBAY</p>
+              <div class="h-0.5 w-12 bg-cyan mt-2 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
+            </div>
+          </div>
+          <div class="iit-card aspect-[4/3] relative group cursor-pointer reveal-scale">
+            <img src="./iit delhi.jpg" class="w-full h-full object-cover" alt="IIT Delhi">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-5 left-5 right-5">
+              <p class="font-display text-2xl text-white tracking-wide">IIT DELHI</p>
+              <div class="h-0.5 w-12 bg-cyan mt-2 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
+            </div>
+          </div>
+          <div class="iit-card aspect-[4/3] relative group cursor-pointer reveal-scale">
+            <img src="./iit madras.jpg" class="w-full h-full object-cover" alt="IIT Madras">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-5 left-5 right-5">
+              <p class="font-display text-2xl text-white tracking-wide">IIT MADRAS</p>
+              <div class="h-0.5 w-12 bg-cyan mt-2 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
+            </div>
+          </div>
+          <div class="iit-card aspect-[4/3] relative group cursor-pointer reveal-scale">
+            <img src="./iit kanpur.jpg" class="w-full h-full object-cover" alt="IIT Kanpur">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-5 left-5 right-5">
+              <p class="font-display text-2xl text-white tracking-wide">IIT KANPUR</p>
+              <div class="h-0.5 w-12 bg-cyan mt-2 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
+            </div>
+          </div>
+          <div class="iit-card aspect-[4/3] relative group cursor-pointer reveal-scale">
+            <img src="./iit kgp.jpg" class="w-full h-full object-cover" alt="IIT KGP">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-5 left-5 right-5">
+              <p class="font-display text-2xl text-white tracking-wide">IIT KGP</p>
+              <div class="h-0.5 w-12 bg-cyan mt-2 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
+            </div>
+          </div>
+          <div class="iit-card aspect-[4/3] relative group cursor-pointer reveal-scale">
+            <img src="./iit guwahati.jpg" class="w-full h-full object-cover" alt="IIT Guwahati">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-5 left-5 right-5">
+              <p class="font-display text-2xl text-white tracking-wide">IIT GUWAHATI</p>
+              <div class="h-0.5 w-12 bg-cyan mt-2 rounded-full transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 02: REAL EXAM EXPERIENCE ==================== -->
+  <section class="relative py-24 md:py-36 overflow-hidden" style="background:linear-gradient(180deg,#07111F 0%,#0d1d33 50%,#07111F 100%)">
+    <div class="absolute top-0 left-1/4 w-[500px] h-[500px] bg-academic/10 rounded-full blur-[120px] pointer-events-none"></div>
+    <div class="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-cyan/10 rounded-full blur-[120px] pointer-events-none"></div>
+    
+    <div class="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
+      <div class="text-center mb-20 reveal">
+        <p class="text-cyan/60 text-xs font-bold tracking-[0.3em] uppercase mb-4">Experience</p>
+        <h2 class="font-display text-5xl md:text-7xl text-white mb-6">REAL EXAM EXPERIENCE</h2>
+        <div class="w-24 h-0.5 bg-gradient-to-r from-cyan via-academic to-emerald mx-auto rounded-full"></div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="gradient-border rounded-3xl p-10 text-center group reveal-scale">
+          <div class="w-16 h-16 mx-auto mb-8 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-cyan/20 transition-colors duration-500">
+            <svg class="w-8 h-8 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/></svg>
+          </div>
+          <h3 class="font-body text-xl font-semibold text-white mb-4 tracking-wide">Real Exam Interface</h3>
+          <p class="text-white/50 text-sm leading-relaxed font-light">Every button, timer, and layout matches the official NTA software. No surprises. Only familiarity.</p>
+        </div>
+
+        <div class="gradient-border rounded-3xl p-10 text-center group reveal-scale">
+          <div class="w-16 h-16 mx-auto mb-8 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-emerald/20 transition-colors duration-500">
+            <svg class="w-8 h-8 text-emerald" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605"/></svg>
+          </div>
+          <h3 class="font-body text-xl font-semibold text-white mb-4 tracking-wide">Smart Preparation</h3>
+          <p class="text-white/50 text-sm leading-relaxed font-light">AI-driven insights identify your weak zones and optimize your daily practice strategy.</p>
+        </div>
+
+        <div class="gradient-border rounded-3xl p-10 text-center group reveal-scale">
+          <div class="w-16 h-16 mx-auto mb-8 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-academic/20 transition-colors duration-500">
+            <svg class="w-8 h-8 text-academic" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+          </div>
+          <h3 class="font-body text-xl font-semibold text-white mb-4 tracking-wide">Better Performance</h3>
+          <p class="text-white/50 text-sm leading-relaxed font-light">Track every metric, compare with toppers, and watch your percentile climb with discipline.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SECTION 03: DAILY MOTIVATION ==================== -->
+  <section class="bg-mist py-24 md:py-36 relative overflow-hidden">
+    <div class="max-w-7xl mx-auto px-6 md:px-12">
+      <div class="grid lg:grid-cols-2 gap-16 items-center">
+        <div class="reveal">
+          <div class="flex items-center gap-4 mb-10">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-academic to-cyan flex items-center justify-center text-white font-bold text-2xl shadow-xl shadow-cyan/20">A</div>
+            <div>
+              <span class="font-body text-lg font-semibold tracking-[0.2em] text-slate-800 uppercase block">THE AIR LAB</span>
+              <span class="text-slate-400 text-xs tracking-wider">JEE Advanced Test Series</span>
+            </div>
+          </div>
+          
+          <h2 class="font-display text-6xl md:text-8xl text-slate-900 leading-[0.85] mb-2">
+            #99+with
+          </h2>
+          <h2 class="font-display text-6xl md:text-8xl text-academic leading-[0.85] mb-10">
+            THEAIRLAB
+          </h2>
+          
+          <div class="space-y-3 pl-4 border-l-2 border-cyan/20">
+            <p class="font-accent text-2xl md:text-3xl text-slate-400 italic tracking-wide">#START PRACTICING...</p>
+            <p class="font-accent text-2xl md:text-3xl text-slate-400 italic tracking-wide">#KEEP LEARNING...</p>
+          </div>
+        </div>
+
+        <div class="relative reveal">
+          <div class="relative h-80 md:h-[28rem] flex items-end justify-center">
+            <svg class="w-full h-full" viewBox="0 0 500 350" fill="none" preserveAspectRatio="xMidYMid meet">
+              <line x1="40" y1="300" x2="480" y2="300" stroke="#e2e8f0" stroke-width="1"/>
+              <line x1="40" y1="230" x2="480" y2="230" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+              <line x1="40" y1="160" x2="480" y2="160" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+              <line x1="40" y1="90" x2="480" y2="90" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+              <path d="M40 300 Q120 280 180 240 T300 180 T420 100 L480 60 L480 300 L40 300Z" fill="url(#areaGrad)" opacity="0.15"/>
+              <path d="M40 300 Q120 280 180 240 T300 180 T420 100 T480 60" stroke="url(#lineGrad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path d="M40 300 Q120 280 180 240 T300 180 T420 100 T480 60" stroke="url(#lineGrad)" stroke-width="12" fill="none" stroke-linecap="round" opacity="0.1" filter="blur(4px)"/>
+              <circle cx="180" cy="240" r="5" fill="#5BBF9B" stroke="white" stroke-width="2"/>
+              <circle cx="300" cy="180" r="5" fill="#2DA8FF" stroke="white" stroke-width="2"/>
+              <circle cx="420" cy="100" r="5" fill="#0E5EFF" stroke="white" stroke-width="2"/>
+              <circle cx="480" cy="60" r="7" fill="#0E5EFF" stroke="white" stroke-width="3"/>
+              <path d="M460 75 L480 60 L465 55" stroke="#0E5EFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <defs>
+                <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style="stop-color:#5BBF9B"/>
+                  <stop offset="50%" style="stop-color:#2DA8FF"/>
+                  <stop offset="100%" style="stop-color:#0E5EFF"/>
+                </linearGradient>
+                <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style="stop-color:#0E5EFF;stop-opacity:0.3"/>
+                  <stop offset="100%" style="stop-color:#0E5EFF;stop-opacity:0"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="absolute top-4 right-4 md:right-8 text-right">
+              <p class="font-display text-5xl md:text-6xl text-slate-300 leading-none mb-1">GIVE</p>
+              <p class="font-display text-3xl md:text-4xl text-slate-400 leading-none mb-1">Atleast a</p>
+              <p class="font-display text-5xl md:text-6xl text-academic leading-none mb-1">TEST</p>
+              <p class="font-display text-3xl md:text-4xl text-slate-400 leading-none mt-2">EVERYDAY</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CONTACT / CTA ==================== -->
+  <section id="contact" class="relative py-24 md:py-36 overflow-hidden">
+    <div class="absolute inset-0 z-0">
+      <img 
+        src="https://images.unsplash.com/photo-1525921429624-479b6a26d84d?w=1920&q=80" 
+        alt="Students walking toward campus" 
+        class="w-full h-full object-cover"
+        style="filter:saturate(0.8) brightness(0.7);"
+      >
+      <div class="absolute inset-0 bg-gradient-to-t from-navy via-navy/80 to-navy/60"></div>
+    </div>
+
+    <div class="max-w-3xl mx-auto px-6 md:px-12 relative z-10">
+      <div class="rounded-[2rem] p-8 md:p-14 reveal" style="background: linear-gradient(165deg, rgba(18,45,95,0.5) 0%, rgba(7,17,31,0.9) 100%); border:1px solid rgba(255,255,255,0.1); box-shadow:0 32px 64px -12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);">
+        <div class="text-center mb-10">
+          <p class="text-cyan text-xs font-bold tracking-[0.2em] uppercase mb-3">Begin Today</p>
+          <h2 class="font-display text-4xl md:text-6xl text-white mb-4 leading-tight">Start your IIT Journey</h2>
+          <p class="text-white/60 text-lg font-accent italic">Join thousands of aspirants preparing with THE AIR LAB.</p>
+        </div>
+
+        <form class="space-y-6" onsubmit="event.preventDefault();">
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-white/50 text-xs uppercase tracking-[0.15em] mb-2 font-medium">Name</label>
+              <input type="text" class="w-full form-input rounded-xl px-5 py-3.5 text-white placeholder-white/20 text-sm" placeholder="Aspirant Name">
+            </div>
+            <div>
+              <label class="block text-white/50 text-xs uppercase tracking-[0.15em] mb-2 font-medium">Phone Number</label>
+              <input type="tel" class="w-full form-input rounded-xl px-5 py-3.5 text-white placeholder-white/20 text-sm" placeholder="+91 98765 43210">
+            </div>
+          </div>
+          <div>
+            <label class="block text-white/50 text-xs uppercase tracking-[0.15em] mb-2 font-medium">Target IIT</label>
+            <select class="w-full form-input rounded-xl px-5 py-3.5 text-white text-sm appearance-none cursor-pointer">
+              <option value="" class="text-navy">Select your dream IIT</option>
+              <option value="bombay" class="text-navy">IIT Bombay</option>
+              <option value="delhi" class="text-navy">IIT Delhi</option>
+              <option value="madras" class="text-navy">IIT Madras</option>
+              <option value="kanpur" class="text-navy">IIT Kanpur</option>
+              <option value="kgp" class="text-navy">IIT Kharagpur</option>
+              <option value="guwahati" class="text-navy">IIT Guwahati</option>
+              <option value="roorkee" class="text-navy">IIT Roorkee</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-white/50 text-xs uppercase tracking-[0.15em] mb-2 font-medium">Message</label>
+            <textarea rows="4" class="w-full form-input rounded-xl px-5 py-3.5 text-white placeholder-white/20 text-sm resize-none" placeholder="Tell us about your goals and dreams..."></textarea>
+          </div>
+          <div class="text-center pt-4">
+            <button type="submit" class="px-14 py-4 btn-primary text-white rounded-full text-sm font-semibold tracking-[0.15em] uppercase">
+              START TEST SERIES
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="bg-navy pt-16 pb-8 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-6 md:px-12">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-8 mb-12">
+        <a href="#" class="flex items-center gap-3 group">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-academic to-cyan flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-cyan/10 group-hover:shadow-cyan/30 transition-shadow">A</div>
+          <span class="font-body text-sm font-semibold tracking-[0.2em] text-white uppercase">THE AIR LAB</span>
+        </a>
+        
+        <div class="flex flex-wrap justify-center gap-8">
+          <a href="#about" class="text-white/40 hover:text-white text-xs uppercase tracking-[0.15em] transition-colors duration-300">About</a>
+          <a href="#features" class="text-white/40 hover:text-white text-xs uppercase tracking-[0.15em] transition-colors duration-300">Features</a>
+          <a href="#iits" class="text-white/40 hover:text-white text-xs uppercase tracking-[0.15em] transition-colors duration-300">IIT Targets</a>
+          <a href="#contact" class="text-white/40 hover:text-white text-xs uppercase tracking-[0.15em] transition-colors duration-300">Contact</a>
+        </div>
+
+        <div class="flex gap-3">
+          <a href="#" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:bg-cyan/20 hover:text-cyan transition-all duration-300">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
+          </a>
+          <a href="#" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:bg-cyan/20 hover:text-cyan transition-all duration-300">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </a>
+          <a href="#" class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:bg-cyan/20 hover:text-cyan transition-all duration-300">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="pt-8 border-t border-white/5 text-center">
+        <p class="text-white/25 text-xs tracking-[0.1em]"> THE AIR LAB. All rights reserved. Crafted for IIT dreams.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== AUTH MODAL ==================== -->
+  <div id="auth-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-navy/80 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white rounded-[24px] p-8 md:p-10 w-[90%] max-w-[420px] shadow-2xl relative transform scale-95 transition-transform duration-300" id="auth-modal-content">
+      <!-- Close button -->
+      <button id="close-modal" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700 transition-colors">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+
+      <!-- View: Sign In -->
+      <div id="view-signin" class="hidden">
+        <h2 class="font-body text-2xl font-bold text-slate-800 mb-2">Login to Test Series</h2>
+        <p class="text-slate-500 text-sm mb-8">Welcome back! Please login to continue</p>
+        
+        <button class="btn-google-auth w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-200 rounded-full text-slate-700 font-semibold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
+          <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Login with Google
+        </button>
+      </div>
+
+      <!-- View: Sign Up Step 1 -->
+      <div id="view-signup-step1" class="hidden">
+        <h2 class="font-body text-2xl font-bold text-slate-800 mb-2">Join Test Series</h2>
+        <p class="text-slate-500 text-sm mb-6">Create an account to begin your journey.</p>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-slate-600 text-xs font-semibold mb-1.5">Full Name</label>
+            <input type="text" id="signup-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all" placeholder="Enter your name">
+          </div>
+          <div>
+            <label class="block text-slate-600 text-xs font-semibold mb-1.5">Class</label>
+            <select id="signup-class" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan transition-all appearance-none">
+              <option value="" disabled selected>Select your class</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+              <option value="dropper">Dropper</option>
+            </select>
+          </div>
+          <button id="btn-next-step" class="w-full mt-4 bg-academic text-white py-3 rounded-full font-semibold text-sm hover:bg-academic/90 transition-colors shadow-md shadow-academic/30">
+            Next
+          </button>
+        </div>
+      </div>
+
+      <!-- View: Sign Up Step 2 -->
+      <div id="view-signup-step2" class="hidden">
+        <div class="mb-4">
+          <button id="btn-back-step" class="text-slate-400 hover:text-slate-700 transition-colors flex items-center gap-1 text-sm font-medium">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
+          </button>
+        </div>
+        <h2 class="font-body text-2xl font-bold text-slate-800 mb-2">Verify Account</h2>
+        <p class="text-slate-500 text-sm mb-8">Link your email to complete registration securely.</p>
+        
+        <button class="btn-google-auth w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-200 rounded-full text-slate-700 font-semibold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
+          <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Verify with Gmail
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== SCRIPTS ==================== -->
+  <script>
+    // Initialize Lenis for buttery smooth scrolling
+    const lenis = new Lenis({
+      duration: 1.4,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+      wheelMultiplier: 0.9,
+    });
+
+    function raf(time) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    // Connect Lenis to GSAP ScrollTrigger
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time) => {
+      lenis.raf(time * 1000);
+    });
+    gsap.ticker.lagSmoothing(0);
+
+    // GSAP + ScrollTrigger
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Navbar scroll effect
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      if(window.scrollY > 60){
+        navbar.classList.add('nav-scrolled');
+      } else {
+        navbar.classList.remove('nav-scrolled');
+      }
+    }, {passive:true});
+
+    // Hero Parallax
+    gsap.to('#hero-bg-img', {
+      yPercent: 12,
+      scale: 1.06,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '.hero-container',
+        start: 'top top',
+        end: 'bottom top',
+        scrub: 1.2
+      }
+    });
+
+    gsap.to('#hero-target', {
+      yPercent: -20,
+      opacity: 0,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '.hero-container',
+        start: 'top top',
+        end: '60% top',
+        scrub: 1
+      }
+    });
+
+    gsap.to('#hero-card', {
+      yPercent: -6,
+      opacity: 0,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '.hero-container',
+        start: 'top top',
+        end: '50% top',
+        scrub: 1
+      }
+    });
+
+    // Reveal animations
+    const revealElements = document.querySelectorAll('.reveal, .reveal-left, .reveal-scale');
+    revealElements.forEach((el) => {
+      const isLeft = el.classList.contains('reveal-left');
+      const isScale = el.classList.contains('reveal-scale');
+      
+      gsap.fromTo(el,
+        {
+          opacity: 0,
+          y: isLeft ? 0 : 50,
+          x: isLeft ? -50 : 0,
+          scale: isScale ? 0.95 : 1
+        },
+        {
+          opacity: 1,
+          y: 0,
+          x: 0,
+          scale: 1,
+          duration: 1.2,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: el,
+            start: 'top 88%',
+            toggleActions: 'play none none none'
+          }
+        }
+      );
+    });
+
+    // Staggered feature items
+    gsap.fromTo('.feature-item',
+      {opacity: 0, x: -40},
+      {
+        opacity: 1,
+        x: 0,
+        duration: 1,
+        stagger: 0.15,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: '.feature-item',
+          start: 'top 85%'
+        }
+      }
+    );
+
+    // Bento grid stagger
+    gsap.fromTo('#iits .iit-card',
+      {opacity: 0, scale: 0.9, y: 30},
+      {
+        opacity: 1,
+        scale: 1,
+        y: 0,
+        duration: 1,
+        stagger: 0.12,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: '#iits',
+          start: 'top 80%'
+        }
+      }
+    );
+
+    // Smooth scroll for anchor links via Lenis
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e){
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if(target){
+          lenis.scrollTo(target, {offset: -80, duration: 1.8});
+        }
+      });
+    });
+
+    // Google Identity Services Integration
+    let tokenClient;
+    const GOOGLE_CLIENT_ID = '483125979983-6obv31b2m6u2d7ss0thgkt3hl5nt6go1.apps.googleusercontent.com'; // User's Client ID
+
+    window.onload = function () {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email profile',
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            // Successfully got the access token, fetch user profile
+            fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+            })
+            .then(res => res.json())
+            .then(userInfo => {
+              console.log('Google User Info:', userInfo);
+              // Handle custom logic here (e.g. create account, sync to DB)
+              const name = document.getElementById('signup-name').value;
+              const cls = document.getElementById('signup-class').value;
+              
+              const userObj = {
+                name: userInfo.name,
+                email: userInfo.email,
+                picture: userInfo.picture,
+                class: (name && cls) ? cls : 'N/A'
+              };
+              
+              localStorage.setItem('airlab_user', JSON.stringify(userObj));
+              
+              // Seamless transition to the Dashboard
+              closeModal();
+              updateUIForUser(userObj);
+              
+              // Fade out effect
+              document.body.style.transition = "opacity 0.5s ease";
+              document.body.style.opacity = "0";
+              
+              // Redirect to the React App Dashboard
+              setTimeout(() => {
+                const encodedUser = encodeURIComponent(JSON.stringify(userObj));
+                window.location.href = "/?user=" + encodedUser; 
+              }, 500);
+            })
+            .catch(err => console.error('Error fetching user info', err));
+          }
+        },
+      });
+    };
+
+    function handleGoogleAuth(e) {
+      e.preventDefault();
+      if(GOOGLE_CLIENT_ID.startsWith('YOUR_GOOGLE_CLIENT_ID')) {
+        alert("Google Sign-In is configured! Please replace 'YOUR_GOOGLE_CLIENT_ID_HERE' in the code with your actual Google OAuth Client ID to test it live.");
+        return;
+      }
+      tokenClient.requestAccessToken();
+    }
+
+    document.querySelectorAll('.btn-google-auth').forEach(btn => {
+      btn.addEventListener('click', handleGoogleAuth);
+    });
+
+    function updateUIForUser(user) {
+      // Update Navbar
+      const navContainer = document.getElementById('nav-auth-container');
+      if(navContainer) {
+        navContainer.innerHTML = `
+          <div class="flex items-center gap-3 cursor-pointer group" onclick="logout()">
+            <img src="${user.picture}" alt="Profile" class="w-8 h-8 rounded-full border border-cyan/30 shadow-md group-hover:border-cyan transition-colors" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'12\\' fill=\\'%232DA8FF\\'/><text x=\\'12\\' y=\\'16\\' font-family=\\'Arial\\' font-size=\\'12\\' fill=\\'white\\' text-anchor=\\'middle\\'>${user.name.charAt(0)}</text></svg>'">
+            <span class="hidden md:block text-white text-sm font-semibold tracking-wide">${user.name.split(' ')[0]}</span>
+            <span class="text-white/40 text-xs uppercase tracking-[0.1em] hover:text-white transition-colors ml-2">Logout</span>
+          </div>
+        `;
+      }
+
+      // Update Hero
+      const heroContainer = document.getElementById('hero-auth-container');
+      if(heroContainer) {
+        const encodedUser = encodeURIComponent(JSON.stringify(user));
+        heroContainer.innerHTML = `
+          <button onclick="window.location.href='/?user=${encodedUser}'" class="px-8 py-3.5 bg-gradient-to-r from-academic to-cyan text-white rounded-full text-sm font-bold tracking-wider hover:shadow-[0_0_20px_rgba(45,168,255,0.4)] transition-all duration-300 btn-pill w-full md:w-auto">
+            ENTER DASHBOARD
+          </button>
+        `;
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('airlab_user');
+      window.location.reload();
+    }
+
+    // Check on load
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedUser = localStorage.getItem('airlab_user');
+      if(savedUser) {
+        try {
+          updateUIForUser(JSON.parse(savedUser));
+        } catch(e) {}
+      }
+    });
+
+    // Modal Logic
+    const modal = document.getElementById('auth-modal');
+    const modalContent = document.getElementById('auth-modal-content');
+    const closeBtn = document.getElementById('close-modal');
+    
+    const viewSignin = document.getElementById('view-signin');
+    const viewSignup1 = document.getElementById('view-signup-step1');
+    const viewSignup2 = document.getElementById('view-signup-step2');
+
+    const btnNext = document.getElementById('btn-next-step');
+    const btnBack = document.getElementById('btn-back-step');
+
+    function openModal(type) {
+      viewSignin.classList.add('hidden');
+      viewSignup1.classList.add('hidden');
+      viewSignup2.classList.add('hidden');
+
+      if (type === 'signin') {
+        viewSignin.classList.remove('hidden');
+      } else if (type === 'signup') {
+        viewSignup1.classList.remove('hidden');
+      }
+
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modalContent.classList.remove('scale-95');
+      modalContent.classList.add('scale-100');
+    }
+
+    function closeModal() {
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      modalContent.classList.remove('scale-100');
+      modalContent.classList.add('scale-95');
+    }
+
+    // Attach to buttons
+    document.querySelectorAll('.btn-open-signin').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.preventDefault(); openModal('signin'); });
+    });
+    document.querySelectorAll('.btn-open-signup').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.preventDefault(); openModal('signup'); });
+    });
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if(e.target === modal) closeModal();
+    });
+
+    // Step Logic
+    btnNext.addEventListener('click', () => {
+      const name = document.getElementById('signup-name').value;
+      const cls = document.getElementById('signup-class').value;
+      if(!name || !cls) {
+        alert("Please fill out all fields.");
+        return;
+      }
+      viewSignup1.classList.add('hidden');
+      viewSignup2.classList.remove('hidden');
+    });
+
+    btnBack.addEventListener('click', () => {
+      viewSignup2.classList.add('hidden');
+      viewSignup1.classList.remove('hidden');
+    });
+
+  </script>
+</body>
+</html>

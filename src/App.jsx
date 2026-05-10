@@ -24,7 +24,8 @@ function ProtectedRoute({ children }) {
   const { currentUser } = useAuth();
   
   if (!currentUser) {
-    return <Navigate to="/login" replace />;
+    window.location.href = "/landing/";
+    return null;
   }
   
   return children;
@@ -42,7 +43,6 @@ function App() {
             <Route path="analysis" element={<Analysis />} />
           </Route>
           
-          <Route path="/login" element={<StudentLogin />} />
           <Route path="/exam" element={<ProtectedRoute><Exam /></ProtectedRoute>} />
         
         {/* Admin Routes */}
