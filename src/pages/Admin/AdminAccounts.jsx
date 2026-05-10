@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { Users, UserPlus, Trash2, Activity, Award, FileText, ChevronRight, X } from 'lucide-react';
 
 function AdminAccounts() {
-  const [users, setUsers] = useState([
-    { id: 1, name: 'Rahul Sharma', email: 'rahul@example.com', status: 'Active', testsGiven: 12, avgScore: '85%', joinDate: '2025-01-15' },
-    { id: 2, name: 'Priya Patel', email: 'priya@example.com', status: 'Offline', testsGiven: 8, avgScore: '72%', joinDate: '2025-02-02' },
-    { id: 3, name: 'Amit Kumar', email: 'amit@example.com', status: 'Active', testsGiven: 15, avgScore: '91%', joinDate: '2024-11-20' },
-    { id: 4, name: 'Neha Gupta', email: 'neha@example.com', status: 'Active', testsGiven: 5, avgScore: '65%', joinDate: '2025-03-10' },
-  ]);
+  const [users, setUsers] = useState(() => {
+    return JSON.parse(localStorage.getItem('airlab_registered_users') || '[]');
+  });
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -18,7 +15,7 @@ function AdminAccounts() {
   const handleAddUser = (e) => {
     e.preventDefault();
     if (newUserData.name && newUserData.email) {
-      setUsers([...users, {
+      const newUsers = [...users, {
         id: Date.now(),
         name: newUserData.name,
         email: newUserData.email,
@@ -26,7 +23,9 @@ function AdminAccounts() {
         testsGiven: 0,
         avgScore: 'N/A',
         joinDate: new Date().toISOString().split('T')[0]
-      }]);
+      }];
+      setUsers(newUsers);
+      localStorage.setItem('airlab_registered_users', JSON.stringify(newUsers));
       setShowAddModal(false);
       setNewUserData({ name: '', email: '' });
     }
@@ -35,7 +34,9 @@ function AdminAccounts() {
   const handleRemoveUser = (id, e) => {
     e.stopPropagation();
     if(window.confirm('Are you sure you want to remove this account?')) {
-      setUsers(users.filter(u => u.id !== id));
+      const newUsers = users.filter(u => u.id !== id);
+      setUsers(newUsers);
+      localStorage.setItem('airlab_registered_users', JSON.stringify(newUsers));
       if(selectedUser && selectedUser.id === id) setSelectedUser(null);
     }
   };

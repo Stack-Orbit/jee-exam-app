@@ -25,7 +25,9 @@ function AllTests() {
       };
     });
 
-    const studentResults = JSON.parse(localStorage.getItem('jee_student_results') || '{}');
+    const userStr = localStorage.getItem('airlab_user');
+    const userEmail = userStr ? JSON.parse(userStr).email : 'default';
+    const studentResults = JSON.parse(localStorage.getItem(`jee_student_results_${userEmail}`) || '{}');
     
     setPapers(formattedAiTests.map(p => ({
       ...p,

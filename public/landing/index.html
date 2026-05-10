@@ -908,6 +908,15 @@
             .then(userInfo => {
               console.log('Google User Info:', userInfo);
               // Handle custom logic here (e.g. create account, sync to DB)
+              
+              const registeredUsers = JSON.parse(localStorage.getItem('airlab_registered_users') || '[]');
+              const isRegistered = registeredUsers.some(u => u.email === userInfo.email);
+              
+              if (!isRegistered) {
+                alert("Account not found. Please contact the administrator to create your account before logging in.");
+                return;
+              }
+              
               const name = document.getElementById('signup-name').value;
               const cls = document.getElementById('signup-class').value;
               

@@ -43,7 +43,9 @@ function Exam() {
         setActiveSection(sections[0]);
 
         if (currentMode === 'review' || currentMode === 'mistakes') {
-           const results = JSON.parse(localStorage.getItem('jee_student_results') || '{}');
+           const userStr = localStorage.getItem('airlab_user');
+           const userEmail = userStr ? JSON.parse(userStr).email : 'default';
+           const results = JSON.parse(localStorage.getItem(`jee_student_results_${userEmail}`) || '{}');
            const res = results[testId];
            if (res) {
              let qs = res.questions;
@@ -154,13 +156,15 @@ function Exam() {
     
     const timeTaken = 10800 - Math.max(0, timeLeft);
 
-    const results = JSON.parse(localStorage.getItem('jee_student_results') || '{}');
+    const userStr = localStorage.getItem('airlab_user');
+    const userEmail = userStr ? JSON.parse(userStr).email : 'default';
+    const results = JSON.parse(localStorage.getItem(`jee_student_results_${userEmail}`) || '{}');
     if (testData) {
        results[testData.id] = {
           timeTaken, timeSpent: currentTimeSpent, totalMarks, mathMarks, phyMarks, chemMarks,
           attempted, correctCnt, incorrectCnt, questions: finalQuestions
        };
-       localStorage.setItem('jee_student_results', JSON.stringify(results));
+       localStorage.setItem(`jee_student_results_${userEmail}`, JSON.stringify(results));
     }
 
     setQuestions(finalQuestions);

@@ -18,7 +18,9 @@ function Analysis() {
     const tid = params.get('testId');
     
     const tests = JSON.parse(localStorage.getItem('jee_ai_tests') || '[]');
-    const results = JSON.parse(localStorage.getItem('jee_student_results') || '{}');
+    const userStr = localStorage.getItem('airlab_user');
+    const userEmail = userStr ? JSON.parse(userStr).email : 'default';
+    const results = JSON.parse(localStorage.getItem(`jee_student_results_${userEmail}`) || '{}');
     
     setAllTests(tests);
     setAllResults(results);
