@@ -95,7 +95,7 @@ function AITestGenerator() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyDyd6-q9ZqC72waChUabjhG8pElU-2t3s8');
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || '');
   const [generatedTest, setGeneratedTest] = useState(null);
   const [progress, setProgress] = useState('');
   const [timer, setTimer] = useState(0);
@@ -417,21 +417,19 @@ ${extractedText}`;
         </p>
       </div>
 
-      {!apiKey && (
-        <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', padding: '15px', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <Key size={24} color="#f59e0b" />
-          <div style={{ flex: 1 }}>
-            <h4 style={{ margin: '0 0 5px 0', color: '#f59e0b' }}>API Key Required</h4>
-            <input 
-              type="password" 
-              placeholder="Enter Gemini API Key" 
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              style={{ width: '100%', maxWidth: '400px', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' }}
-            />
-          </div>
+      <div style={{ backgroundColor: apiKey ? 'rgba(34, 197, 94, 0.08)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${apiKey ? '#22c55e' : '#f59e0b'}`, padding: '15px', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+        <Key size={24} color={apiKey ? '#22c55e' : '#f59e0b'} />
+        <div style={{ flex: 1 }}>
+          <h4 style={{ margin: '0 0 5px 0', color: apiKey ? '#22c55e' : '#f59e0b' }}>{apiKey ? 'API Key Set' : 'API Key Required'}</h4>
+          <input 
+            type="password" 
+            placeholder="Paste your Gemini API Key here" 
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            style={{ width: '100%', maxWidth: '400px', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' }}
+          />
         </div>
-      )}
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: generatedTest ? '350px 1fr' : '1fr 1fr', gap: '30px', transition: 'all 0.3s' }}>
         <div style={{ backgroundColor: 'var(--dash-surface)', padding: '30px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', height: '800px', overflowY: 'auto' }}>
