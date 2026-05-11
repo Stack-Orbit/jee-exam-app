@@ -4,7 +4,6 @@ import { GoogleGenAI } from '@google/genai';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
 
-
 function AITestGenerator() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -445,14 +444,14 @@ Ensure maximum reliability and no mistakes. Take your time to parse every page c
             }}
           >
             {loading ? <Loader2 size={24} className="animate-spin" /> : <RefreshCw size={24} />}
-            {loading ? 'Processing with AI...' : 'Generate Test'}
+            {loading ? 'Processing with Gemini AI...' : 'Generate Test'}
           </button>
           
           {loading && (
             <div style={{ marginTop: '15px', textAlign: 'center', color: '#c084fc', fontSize: '0.9rem' }}>
               <p>{progress}</p>
               <p style={{ marginTop: '5px', opacity: 0.8, fontWeight: 'bold' }}>
-                Estimated Time Remaining: {Math.max(0, 120 - timer)}s
+                Estimated Time Remaining: {Math.max(0, 60 - timer)}s
               </p>
             </div>
           )}
