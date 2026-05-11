@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Key, Image as ImageIcon } from 'lucide-react';
-import Tesseract from 'tesseract.js';
 import { GoogleGenAI } from '@google/genai';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -351,6 +350,61 @@ ${extractedText}`;
   const renderTextWithMath = (text) => {
     if (!text) return null;
     
+    // --- Set of known math-mode-only LaTeX commands for orphan detection ---
+    const ORPHAN_MATH_CMDS = new Set([
+      'frac','dfrac','tfrac','mathbb','mathbf','mathit','mathcal','mathsf','mathrm',
+      'sqrt','sum','prod','int','iint','iiint','oint','lim',
+      'infty','partial','nabla','forall','exists',
+      'alpha','beta','gamma','delta','epsilon','varepsilon','zeta','eta','theta',
+      'vartheta','iota','kappa','lambda','mu','nu','xi','pi','rho','sigma',
+      'tau','upsilon','phi','varphi','chi','psi','omega',
+      'Gamma','Delta','Theta','Lambda','Xi','Pi','Sigma','Phi','Psi','Omega',
+      'in','notin','subset','subseteq','supset','supseteq',
+      'cup','cap','setminus','emptyset',
+      'to','rightarrow','leftarrow','Rightarrow','Leftarrow','leftrightarrow',
+      'mapsto','hookrightarrow',
+      'le','ge','leq','geq','neq','approx','equiv','sim','cong','propto',
+      'times','div','cdot','pm','mp','circ','oplus','otimes',
+      'vec','hat','bar','dot','ddot','tilde','overline','widehat','widetilde',
+      'log','ln','sin','cos','tan','sec','csc','cot',
+      'arcsin','arccos','arctan',
+      'det','max','min','sup','inf','gcd','lcm',
+      'binom','tbinom','dbinom','operatorname',
+      'left','right','big','Big','bigg','Bigg',
+      'ldots','cdots','ddots','vdots',
+      'not','neg',
+    ]);
+
+    // Helper: find position after balanced brace group starting at pos
+    const findClosingBrace = (str, pos) => {
+      if (str[pos] !== '{') return pos;
+      let depth = 1, j = pos + 1;
+      while (j < str.length && depth > 0) {
+        if (str[j] === '{') depth++;
+        else if (str[j] === '}') depth--;
+        j++;
+      }
+      return j;
+    };
+
+    // Helper: extract a complete math atom starting at pos
+    const extractMathAtom = (str, pos) => {
+      if (str[pos] !== '\\') return null;
+      let ce = pos + 1;
+      while (ce < str.length && /[a-zA-Z*]/.test(str[ce])) ce++;
+      const cmd = str.substring(pos + 1, ce);
+      if (!cmd || !ORPHAN_MATH_CMDS.has(cmd)) return null;
+      let p = ce;
+      while (p < str.length && str[p] === ' ') p++;
+      while (p < str.length && str[p] === '{') p = findClosingBrace(str, p);
+      while (p < str.length && (str[p] === '_' || str[p] === '^')) {
+        p++;
+        if (p < str.length && str[p] === '{') p = findClosingBrace(str, p);
+        else if (p < str.length) p++;
+      }
+      return { content: str.substring(pos, p), end: p };
+    };
+
     let processedText = text;
     // Remove unsupported formatting wrappers
     processedText = processedText.replace(/\\begin\{center\}/g, '');
@@ -407,7 +461,6 @@ ${extractedText}`;
     return segments.map((seg, index) => {
       if (seg.type === 'display' || seg.type === 'inline') {
         let mathStr = seg.math;
-        // Convert text formatting to math formatting to prevent KaTeX errors with nested math
         mathStr = mathStr.replace(/\\textbf\s*\{/g, '\\mathbf{');
         mathStr = mathStr.replace(/\\textit\s*\{/g, '\\mathit{');
         
@@ -421,12 +474,67 @@ ${extractedText}`;
       }
       
       let textStr = seg.content;
-      // Strip formatting commands from plain text so they don't render literally
+      // Strip formatting commands from plain text
       textStr = textStr.replace(/\\textbf\s*\{([^{}]*)\}/g, '$1');
       textStr = textStr.replace(/\\textit\s*\{([^{}]*)\}/g, '$1');
       textStr = textStr.replace(/\\underline\s*\{([^{}]*)\}/g, '$1');
       textStr = textStr.replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+
+      // --- ORPHAN MATH DETECTION ---
+      // If this text segment contains any known math-only LaTeX commands (without $ delimiters),
+      // split it into sub-parts and render the math atoms via KaTeX
+      const hasOrphanMath = /\\[a-zA-Z]+/.test(textStr) && 
+        Array.from(textStr.matchAll(/\\([a-zA-Z]+)/g)).some(m => ORPHAN_MATH_CMDS.has(m[1]));
       
+      if (hasOrphanMath) {
+        const subParts = [];
+        let i = 0, currentTxt = '';
+        while (i < textStr.length) {
+          if (textStr[i] === '\\') {
+            const atom = extractMathAtom(textStr, i);
+            if (atom) {
+              if (currentTxt) { subParts.push({ t: 'text', c: currentTxt }); currentTxt = ''; }
+              // Merge adjacent math atoms (e.g., \mathbb{R}\to\mathbb{R} becomes one KaTeX block)
+              let merged = atom.content;
+              let pos = atom.end;
+              while (pos < textStr.length) {
+                if (textStr[pos] === '\\') {
+                  const next = extractMathAtom(textStr, pos);
+                  if (next) { merged += next.content; pos = next.end; continue; }
+                }
+                break;
+              }
+              subParts.push({ t: 'math', c: merged });
+              i = pos;
+              continue;
+            }
+          }
+          currentTxt += textStr[i];
+          i++;
+        }
+        if (currentTxt) subParts.push({ t: 'text', c: currentTxt });
+
+        return (
+          <span key={index}>
+            {subParts.map((sp, si) => {
+              if (sp.t === 'math') {
+                let m = sp.c;
+                m = m.replace(/\\textbf\s*\{/g, '\\mathbf{');
+                m = m.replace(/\\textit\s*\{/g, '\\mathit{');
+                try { return <InlineMath key={`${index}-m${si}`} math={m} />; }
+                catch (e) { return <span key={`${index}-m${si}`} style={{fontFamily:'monospace', color:'#f87171'}}>{sp.c}</span>; }
+              }
+              const lines = sp.c.split('\\\\');
+              if (lines.length > 1) {
+                return <span key={`${index}-t${si}`}>{lines.map((l, li) => <span key={li}>{l}{li < lines.length - 1 && <br />}</span>)}</span>;
+              }
+              return <span key={`${index}-t${si}`}>{sp.c}</span>;
+            })}
+          </span>
+        );
+      }
+
+      // No orphan math — render as plain text with newline support
       const lines = textStr.split('\\\\');
       if (lines.length > 1) {
         return (
