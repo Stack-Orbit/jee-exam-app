@@ -8,7 +8,7 @@ function AITestGenerator() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyAdGf0HjAjmB2UCfJX7uFX2ZZjrJN26D0w');
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBGFT5qt0mV8OQguUm9xe4zRq09zYql18U');
   const [generatedTest, setGeneratedTest] = useState(null);
   const [progress, setProgress] = useState('');
   const [timer, setTimer] = useState(0);
