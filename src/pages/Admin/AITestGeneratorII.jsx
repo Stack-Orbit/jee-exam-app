@@ -15,7 +15,7 @@ const UNICODE_TO_LATEX = {
   'ι': '\\iota', 'κ': '\\kappa', 'λ': '\\lambda', 'μ': '\\mu',
   'ν': '\\nu', 'ξ': '\\xi', 'π': '\\pi', 'ρ': '\\rho',
   'σ': '\\sigma', 'τ': '\\tau', 'υ': '\\upsilon', 'φ': '\\phi',
-  'χ': '\\psi', 'ψ': '\\psi', 'ω': '\\omega',
+  'χ': '\\chi', 'ψ': '\\psi', 'ω': '\\omega',
   'Γ': '\\Gamma', 'Δ': '\\Delta', 'Θ': '\\Theta', 'Λ': '\\Lambda',
   'Ξ': '\\Xi', 'Π': '\\Pi', 'Σ': '\\Sigma', 'Φ': '\\Phi',
   'Ψ': '\\Psi', 'Ω': '\\Omega',
