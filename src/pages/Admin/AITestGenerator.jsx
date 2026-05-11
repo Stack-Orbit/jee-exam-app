@@ -91,7 +91,7 @@ Return a strict JSON object with:
 Ensure the order of marks perfectly matches the order of the percentiles.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: [
           { role: 'user', parts: [ { inlineData: { data: base64Data, mimeType: percentileFile.type } }, { text: prompt } ] }
         ],
@@ -150,7 +150,7 @@ CRITICAL RULES:
 Ensure maximum reliability and no mistakes. Take your time to parse every page correctly.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents: [
           {
             role: 'user',
