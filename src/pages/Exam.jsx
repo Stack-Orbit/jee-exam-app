@@ -265,11 +265,45 @@ function Exam() {
 
   const renderTextWithMath = (text) => {
     if (!text) return null;
-    const parts = text.split(/(\\\(.*?\\\)|\\\[.*?\\\])/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('\\(') && part.endsWith('\\)')) return <InlineMath key={index} math={part.slice(2, -2)} />;
-      else if (part.startsWith('\\[') && part.endsWith('\\]')) return <BlockMath key={index} math={part.slice(2, -2)} />;
-      return <span key={index}>{part}</span>;
+    const segments = [];
+    
+    // First pass: extract $$...$$ display math
+    const displayParts = text.split(/(\$\$[\s\S]*?\$\$)/g);
+    for (const dp of displayParts) {
+      if (dp.startsWith('$$') && dp.endsWith('$$')) {
+        segments.push({ type: 'display', math: dp.slice(2, -2).trim() });
+      } else {
+        // Second pass: extract $...$ inline math
+        const inlineParts = dp.split(/(\$[^$]+?\$)/g);
+        for (const ip of inlineParts) {
+          if (ip.startsWith('$') && ip.endsWith('$') && ip.length > 2) {
+            segments.push({ type: 'inline', math: ip.slice(1, -1).trim() });
+          } else if (ip) {
+            // Legacy: also handle \\( ... \\) patterns
+            const legacyParts = ip.split(/(\\\\?\\\(.*?\\\\?\\\)|\\\\?\\\[.*?\\\\?\\\])/g);
+            for (const lp of legacyParts) {
+              if (/^\\\\?\\\(/.test(lp)) {
+                segments.push({ type: 'inline', math: lp.replace(/^\\\\?\\\(/, '').replace(/\\\\?\\\)$/, '').trim() });
+              } else if (/^\\\\?\\\[/.test(lp)) {
+                segments.push({ type: 'display', math: lp.replace(/^\\\\?\\\[/, '').replace(/\\\\?\\\]$/, '').trim() });
+              } else if (lp) {
+                segments.push({ type: 'text', content: lp });
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    return segments.map((seg, index) => {
+      if (seg.type === 'display') {
+        try { return <BlockMath key={index} math={seg.math} />; }
+        catch (e) { return <span key={index} style={{fontFamily:'monospace'}}>{seg.math}</span>; }
+      } else if (seg.type === 'inline') {
+        try { return <InlineMath key={index} math={seg.math} />; }
+        catch (e) { return <span key={index} style={{fontFamily:'monospace'}}>{seg.math}</span>; }
+      }
+      return <span key={index}>{seg.content}</span>;
     });
   };
 

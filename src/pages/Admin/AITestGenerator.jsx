@@ -136,7 +136,7 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
 
       setProgress('Analyzing document structure and extracting all 75 questions... (This may take 30-60 seconds)');
 
-      // ── STEP 3: Ultra-precise extraction prompt ──
+      // ── STEP 3: Extraction prompt with $ delimiters for math ──
       const prompt = `You are an expert AI that extracts JEE Main exam papers from PDF into structured JSON.
 
 TASK: Parse ALL 75 questions from this JEE Main exam paper PDF.
@@ -146,45 +146,51 @@ STRUCTURE:
 - Chemistry: Q26-45 (MCQ Section 1) + Q46-50 (Numerical Section 2)  
 - Mathematics: Q51-70 (MCQ Section 1) + Q71-75 (Numerical Section 2)
 
-ABSOLUTE RULES:
+RULES:
 
 1. NUMBERING: Use GLOBAL numbering 1-75. NEVER reset to 1 at new sections.
 
-2. SECTION NAMES (exact format):
-   "Physics Section 1", "Physics Section 2"
-   "Chemistry Section 1", "Chemistry Section 2"  
-   "Mathematics Section 1", "Mathematics Section 2"
+2. SECTION NAMES (exact):
+   "Physics Section 1", "Physics Section 2", "Chemistry Section 1", "Chemistry Section 2", "Mathematics Section 1", "Mathematics Section 2"
 
 3. TYPES:
-   - Q1-20, Q26-45, Q51-70: type="single_correct" with 4 options
-   - Q21-25, Q46-50, Q71-75: type="numerical" with empty options array
+   Q1-20, Q26-45, Q51-70: type="single_correct" with 4 options (id: "A","B","C","D")
+   Q21-25, Q46-50, Q71-75: type="numerical" with empty options array
 
-4. OPTIONS:
-   - Use id: "A", "B", "C", "D" (letters, NOT numbers)
-   - Option text must NOT start with "(1)", "(2)", "(A)", "(B)" etc. Strip leading option labels.
-   - Example: if PDF shows "(1) 16", the option text should be just "16"
-   - Example: if PDF shows "(A) \\(x^2\\)", the option text should be "\\(x^2\\)"
+4. OPTIONS: 
+   Use id "A","B","C","D". Strip any leading labels from option text.
+   WRONG option text: "(1) 16" or "(A) 16" 
+   CORRECT option text: "16"
 
-5. MATH/LATEX FORMATTING (CRITICAL):
-   - ALL mathematical expressions MUST be wrapped in LaTeX delimiters
-   - Use \\( ... \\) for inline math
-   - Every single Greek letter, equation, symbol, fraction, integral, summation etc. MUST be inside \\( ... \\)
-   - WRONG: "the value of lambda + mu is"
-   - CORRECT: "the value of \\( \\lambda + \\mu \\) is"
-   - WRONG: "Let S = {z in C : z^2 + 4z + 16 = 0}"
-   - CORRECT: "Let \\( S = \\{z \\in \\mathbb{C} : z^2 + 4z + 16 = 0\\} \\)"
-   - WRONG: "f : [1, infinity) to [1, infinity)"
-   - CORRECT: "\\( f : [1, \\infty) \\to [1, \\infty) \\)"
-   - Even single variables like x, y, z in math context should be wrapped: \\( x \\)
-   - Double-escape ALL backslashes in JSON strings
+5. MATH FORMATTING - THIS IS THE MOST IMPORTANT RULE:
+   Use DOLLAR SIGN delimiters for ALL math: $...$ for inline math.
+   EVERY Greek letter, equation, variable, fraction, integral, etc. MUST be inside $...$.
+   
+   EXAMPLES:
+   WRONG: "the value of lambda + mu"
+   CORRECT: "the value of $\\lambda + \\mu$"
+   
+   WRONG: "Let S = {z in C : z^2 + 4z = 0}"
+   CORRECT: "Let $S = \\{z \\in \\mathbb{C} : z^2 + 4z = 0\\}$"
+   
+   WRONG: "f(x) = x^2 + 1"
+   CORRECT: "$f(x) = x^2 + 1$"
+   
+   WRONG: "P(3 cos alpha, 2 sin alpha)"
+   CORRECT: "$P(3\\cos\\alpha, 2\\sin\\alpha)$"
+   
+   WRONG: "frac{x^2}{9} + frac{y^2}{4} = 1"
+   CORRECT: "$\\frac{x^2}{9} + \\frac{y^2}{4} = 1$"
+   
+   Even single math variables should be wrapped: "point $R$" not "point R"
+   
+   Use $$ ... $$ ONLY for standalone display equations on their own line.
 
-6. CORRECT ANSWER: 
-   - MCQ: "A", "B", "C", or "D"
-   - Numerical: the numerical answer as string, e.g. "42"
+6. CORRECT ANSWER: MCQ: "A"/"B"/"C"/"D". Numerical: answer as string e.g. "42"
 
-7. DIAGRAMS: Set "needsScreenshot": true if question/option has an image/diagram/graph/circuit
+7. DIAGRAMS: Set "needsScreenshot": true if question/option has image/diagram/graph
 
-8. IGNORE page headers, footers, watermarks, instructions.`;
+8. IGNORE page headers, footers, watermarks.`;
 
       // ── STEP 4: Send PDF directly to Gemini ──
       const response = await ai.models.generateContent({
@@ -378,75 +384,63 @@ ABSOLUTE RULES:
     }
   };
 
-  // Post-process text to fix raw LaTeX commands that weren't wrapped in delimiters
-  const fixRawLatex = (text) => {
-    if (!text) return text;
-    // Common LaTeX commands that should be in math mode
-    const latexCommands = /(?<!\\\()\\(lambda|mu|alpha|beta|gamma|delta|epsilon|theta|phi|psi|omega|sigma|pi|rho|tau|eta|zeta|xi|nu|kappa|Lambda|Gamma|Delta|Theta|Phi|Psi|Omega|Sigma|Pi|infty|sum|prod|int|sqrt|frac|vec|hat|bar|dot|nabla|partial|forall|exists|in|notin|subset|subseteq|cup|cap|to|rightarrow|leftarrow|Rightarrow|Leftarrow|leq|geq|neq|approx|equiv|pm|mp|times|div|cdot|circ|oplus|otimes|mathbb|mathrm|mathcal|mathbf|mathit|text|lim|log|ln|sin|cos|tan|sec|csc|cot)(?![a-zA-Z])/g;
-    
-    // Check if text has raw LaTeX commands outside of \( ... \) delimiters
-    // Split by existing delimiters first
-    const parts = text.split(/(\\\(.*?\\\)|\\\[.*?\\\])/g);
-    let fixed = '';
-    for (const part of parts) {
-      if (part.startsWith('\\(') || part.startsWith('\\[')) {
-        fixed += part; // Already delimited, keep as-is
-      } else if (latexCommands.test(part)) {
-        // This part has raw LaTeX - try to wrap math segments
-        // Replace segments that look like math expressions
-        let p = part;
-        // Wrap isolated LaTeX command sequences in \( ... \)
-        p = p.replace(/(?:^|(?<=\s|,|:|;|\.|=))([^a-zA-Z]*?(?:\\[a-zA-Z]+(?:\{[^}]*\})*(?:[_^](?:\{[^}]*\}|[a-zA-Z0-9]))*[^,;:.!?\s]*)+)/g, (match) => {
-          if (match.trim() && /\\[a-zA-Z]/.test(match)) {
-            return '\\(' + match.trim() + '\\)';
-          }
-          return match;
-        });
-        fixed += p;
-      } else {
-        fixed += part;
-      }
-    }
-    return fixed;
-  };
-
   const renderTextWithMath = (text) => {
     if (!text) return null;
-    // First, try to fix any raw LaTeX that wasn't properly delimited
-    let processedText = text;
     
-    // Strip any raw LaTeX command patterns and wrap them in delimiters
-    // Handle common patterns: \command or \command{arg}
-    processedText = processedText.replace(
-      /(?<![\\(])\\(lambda|mu|alpha|beta|gamma|delta|epsilon|theta|phi|psi|omega|sigma|pi|rho|tau|eta|zeta|Lambda|Gamma|Delta|Theta|Phi|Psi|Omega|Sigma|Pi|infty|sum|prod|int|sqrt|frac|vec|hat|nabla|partial|forall|exists|in|notin|subset|cup|cap|to|rightarrow|leq|geq|neq|approx|equiv|pm|times|div|cdot|mathbb|mathrm|lim|log|ln|sin|cos|tan)(?:\{[^}]*\})*(?:[_^](?:\{[^}]*\}|[a-zA-Z0-9]))*/g,
-      (match, cmd, offset) => {
-        // Check if already inside \( ... \)
-        const before = processedText.substring(Math.max(0, offset - 10), offset);
-        if (before.includes('\\(')) return match;
-        return '\\(' + match + '\\)';
-      }
-    );
-
-    const parts = processedText.split(/(\\\(.*?\\\)|\\\[.*?\\\])/g);
-    return parts.map((part, index) => {
-      if (part.startsWith('\\(') && part.endsWith('\\)')) {
-        const math = part.slice(2, -2).trim();
-        try {
-          return <InlineMath key={index} math={math} />;
-        } catch (e) {
-          return <span key={index} style={{color: '#f87171', fontFamily: 'monospace'}}>{math}</span>;
+    // Split on $$...$$ (display) and $...$ (inline) math delimiters
+    // Process display math first, then inline
+    const segments = [];
+    let remaining = text;
+    
+    // First pass: extract $$...$$ display math
+    const displayParts = remaining.split(/(\$\$[\s\S]*?\$\$)/g);
+    
+    for (const dp of displayParts) {
+      if (dp.startsWith('$$') && dp.endsWith('$$')) {
+        segments.push({ type: 'display', math: dp.slice(2, -2).trim() });
+      } else {
+        // Second pass: extract $...$ inline math from non-display parts
+        const inlineParts = dp.split(/(\$[^$]+?\$)/g);
+        for (const ip of inlineParts) {
+          if (ip.startsWith('$') && ip.endsWith('$') && ip.length > 2) {
+            segments.push({ type: 'inline', math: ip.slice(1, -1).trim() });
+          } else if (ip) {
+            // Also check for legacy \\( ... \\) or \( ... \) patterns
+            const legacyParts = ip.split(/(\\*\\\([^)]*?\\*\\\)|\\*\\\[[^\]]*?\\*\\\])/g);
+            for (const lp of legacyParts) {
+              if (/^\\*\\\(/.test(lp)) {
+                const math = lp.replace(/^\\*\\\(/, '').replace(/\\*\\\)$/, '').trim();
+                segments.push({ type: 'inline', math });
+              } else if (/^\\*\\\[/.test(lp)) {
+                const math = lp.replace(/^\\*\\\[/, '').replace(/\\*\\\]$/, '').trim();
+                segments.push({ type: 'display', math });
+              } else if (lp) {
+                segments.push({ type: 'text', content: lp });
+              }
+            }
+          }
         }
-      } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
-        const math = part.slice(2, -2).trim();
+      }
+    }
+    
+    return segments.map((seg, index) => {
+      if (seg.type === 'display') {
         try {
-          return <BlockMath key={index} math={math} />;
+          return <BlockMath key={index} math={seg.math} />;
         } catch (e) {
-          return <span key={index} style={{color: '#f87171', fontFamily: 'monospace'}}>{math}</span>;
+          return <span key={index} style={{color:'#f87171',fontFamily:'monospace'}}>{"$$" + seg.math + "$$"}</span>;
+        }
+      } else if (seg.type === 'inline') {
+        try {
+          return <InlineMath key={index} math={seg.math} />;
+        } catch (e) {
+          return <span key={index} style={{color:'#f87171',fontFamily:'monospace'}}>{"$" + seg.math + "$"}</span>;
         }
       }
-      return <span key={index}>{part}</span>;
+      return <span key={index}>{seg.content}</span>;
     });
   };
+
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
