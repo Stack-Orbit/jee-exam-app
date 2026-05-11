@@ -137,27 +137,54 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
       setProgress('Analyzing document structure and extracting all 75 questions... (This may take 30-60 seconds)');
 
       // ── STEP 3: Ultra-precise extraction prompt ──
-      const prompt = `You are an expert AI trained to perfectly extract and parse JEE exam papers from a PDF into a highly structured JSON format. 
-Your task is to parse the ENTIRE uploaded JEE exam paper (exactly 75 questions) and meticulously extract every single question.
+      const prompt = `You are an expert AI that extracts JEE Main exam papers from PDF into structured JSON.
 
-CRITICAL RULES:
-1. EXTRACT ALL 75 QUESTIONS. You must use GLOBAL numbering from 1 to 75 for the 'questionNumber' field. Do NOT reset the question number back to 1 when a new section starts.
-2. SECTION NAMES must follow this format exactly:
-   - "Physics Section 1", "Physics Section 2"
-   - "Chemistry Section 1", "Chemistry Section 2"
-   - "Mathematics Section 1", "Mathematics Section 2"
-3. QUESTION TYPES:
-   - Questions 1-20, 26-45, 51-70: type "single_correct" (MCQ with 4 options A/B/C/D)
-   - Questions 21-25, 46-50, 71-75: type "numerical" (integer answer, NO options)
-4. For ANY math equations or symbols, you MUST use LaTeX formatting. 
-5. IN JSON, YOU MUST DOUBLE-ESCAPE EVERY BACKSLASH! Write '\\\\(' instead of '\\('. Write '\\\\[' instead of '\\['. Write '\\\\frac' instead of '\\frac'. 
-   - Incorrect: "text": "\\( x^2 \\)"
-   - Correct: "text": "\\\\( x^2 \\\\)"
-6. The PDF often contains the answer key at the bottom of each question. 
-7. IMAGES & SCREENSHOTS: If a question or an option contains a graphical image, diagram, or chart that cannot be represented by text/LaTeX, you MUST set "needsScreenshot": true for that item.
-8. NO REPETITIVE TEXT: Do NOT repeat the same words or phrases. Ignore page headers/footers/watermarks.
+TASK: Parse ALL 75 questions from this JEE Main exam paper PDF.
 
-Ensure maximum reliability and no mistakes. Take your time to parse every page correctly.`;
+STRUCTURE:
+- Physics: Q1-20 (MCQ Section 1) + Q21-25 (Numerical Section 2)
+- Chemistry: Q26-45 (MCQ Section 1) + Q46-50 (Numerical Section 2)  
+- Mathematics: Q51-70 (MCQ Section 1) + Q71-75 (Numerical Section 2)
+
+ABSOLUTE RULES:
+
+1. NUMBERING: Use GLOBAL numbering 1-75. NEVER reset to 1 at new sections.
+
+2. SECTION NAMES (exact format):
+   "Physics Section 1", "Physics Section 2"
+   "Chemistry Section 1", "Chemistry Section 2"  
+   "Mathematics Section 1", "Mathematics Section 2"
+
+3. TYPES:
+   - Q1-20, Q26-45, Q51-70: type="single_correct" with 4 options
+   - Q21-25, Q46-50, Q71-75: type="numerical" with empty options array
+
+4. OPTIONS:
+   - Use id: "A", "B", "C", "D" (letters, NOT numbers)
+   - Option text must NOT start with "(1)", "(2)", "(A)", "(B)" etc. Strip leading option labels.
+   - Example: if PDF shows "(1) 16", the option text should be just "16"
+   - Example: if PDF shows "(A) \\(x^2\\)", the option text should be "\\(x^2\\)"
+
+5. MATH/LATEX FORMATTING (CRITICAL):
+   - ALL mathematical expressions MUST be wrapped in LaTeX delimiters
+   - Use \\( ... \\) for inline math
+   - Every single Greek letter, equation, symbol, fraction, integral, summation etc. MUST be inside \\( ... \\)
+   - WRONG: "the value of lambda + mu is"
+   - CORRECT: "the value of \\( \\lambda + \\mu \\) is"
+   - WRONG: "Let S = {z in C : z^2 + 4z + 16 = 0}"
+   - CORRECT: "Let \\( S = \\{z \\in \\mathbb{C} : z^2 + 4z + 16 = 0\\} \\)"
+   - WRONG: "f : [1, infinity) to [1, infinity)"
+   - CORRECT: "\\( f : [1, \\infty) \\to [1, \\infty) \\)"
+   - Even single variables like x, y, z in math context should be wrapped: \\( x \\)
+   - Double-escape ALL backslashes in JSON strings
+
+6. CORRECT ANSWER: 
+   - MCQ: "A", "B", "C", or "D"
+   - Numerical: the numerical answer as string, e.g. "42"
+
+7. DIAGRAMS: Set "needsScreenshot": true if question/option has an image/diagram/graph/circuit
+
+8. IGNORE page headers, footers, watermarks, instructions.`;
 
       // ── STEP 4: Send PDF directly to Gemini ──
       const response = await ai.models.generateContent({
@@ -205,16 +232,14 @@ Ensure maximum reliability and no mistakes. Take your time to parse every page c
       // ── STEP 5: Parse response ──
       setProgress('Formatting results...');
       const parsedQuestions = JSON.parse(response.text);
-      
-      // Rebuild the sections array in JavaScript from the flat questions
-      // AND enforce hardcoded Numerical ranges (21-25, 46-50, 71-75)
+
+      // Rebuild the sections array and clean up AI output
       const sectionsMap = {};
       parsedQuestions.forEach((q, index) => {
-        // Enforce 1-75 numbering based on array index to fix AI numbering errors
         const globalNum = index + 1;
         q.questionNumber = globalNum;
         
-        // Enforce numerical questions for the exact ranges requested
+        // Enforce numerical questions for the exact ranges
         if ((globalNum >= 21 && globalNum <= 25) || 
             (globalNum >= 46 && globalNum <= 50) || 
             (globalNum >= 71 && globalNum <= 75)) {
@@ -222,6 +247,18 @@ Ensure maximum reliability and no mistakes. Take your time to parse every page c
           q.options = [];
         } else {
           q.type = "single_correct";
+          // Fix option IDs: ensure A/B/C/D format
+          if (q.options) {
+            const optionLetters = ['A', 'B', 'C', 'D'];
+            q.options = q.options.slice(0, 4).map((opt, oi) => {
+              opt.id = optionLetters[oi];
+              // Strip duplicate leading labels like "(1)", "(A)", "(a)", "1.", "A." etc.
+              if (opt.text) {
+                opt.text = opt.text.replace(/^\s*\(?\s*[1-4a-dA-D]\s*[\).:]\s*/, '').trim();
+              }
+              return opt;
+            });
+          }
         }
 
         const secName = q.sectionName || "General Section";
@@ -341,14 +378,71 @@ Ensure maximum reliability and no mistakes. Take your time to parse every page c
     }
   };
 
+  // Post-process text to fix raw LaTeX commands that weren't wrapped in delimiters
+  const fixRawLatex = (text) => {
+    if (!text) return text;
+    // Common LaTeX commands that should be in math mode
+    const latexCommands = /(?<!\\\()\\(lambda|mu|alpha|beta|gamma|delta|epsilon|theta|phi|psi|omega|sigma|pi|rho|tau|eta|zeta|xi|nu|kappa|Lambda|Gamma|Delta|Theta|Phi|Psi|Omega|Sigma|Pi|infty|sum|prod|int|sqrt|frac|vec|hat|bar|dot|nabla|partial|forall|exists|in|notin|subset|subseteq|cup|cap|to|rightarrow|leftarrow|Rightarrow|Leftarrow|leq|geq|neq|approx|equiv|pm|mp|times|div|cdot|circ|oplus|otimes|mathbb|mathrm|mathcal|mathbf|mathit|text|lim|log|ln|sin|cos|tan|sec|csc|cot)(?![a-zA-Z])/g;
+    
+    // Check if text has raw LaTeX commands outside of \( ... \) delimiters
+    // Split by existing delimiters first
+    const parts = text.split(/(\\\(.*?\\\)|\\\[.*?\\\])/g);
+    let fixed = '';
+    for (const part of parts) {
+      if (part.startsWith('\\(') || part.startsWith('\\[')) {
+        fixed += part; // Already delimited, keep as-is
+      } else if (latexCommands.test(part)) {
+        // This part has raw LaTeX - try to wrap math segments
+        // Replace segments that look like math expressions
+        let p = part;
+        // Wrap isolated LaTeX command sequences in \( ... \)
+        p = p.replace(/(?:^|(?<=\s|,|:|;|\.|=))([^a-zA-Z]*?(?:\\[a-zA-Z]+(?:\{[^}]*\})*(?:[_^](?:\{[^}]*\}|[a-zA-Z0-9]))*[^,;:.!?\s]*)+)/g, (match) => {
+          if (match.trim() && /\\[a-zA-Z]/.test(match)) {
+            return '\\(' + match.trim() + '\\)';
+          }
+          return match;
+        });
+        fixed += p;
+      } else {
+        fixed += part;
+      }
+    }
+    return fixed;
+  };
+
   const renderTextWithMath = (text) => {
     if (!text) return null;
-    const parts = text.split(/(\\\(.*?\\\)|\\\[.*?\\\])/g);
+    // First, try to fix any raw LaTeX that wasn't properly delimited
+    let processedText = text;
+    
+    // Strip any raw LaTeX command patterns and wrap them in delimiters
+    // Handle common patterns: \command or \command{arg}
+    processedText = processedText.replace(
+      /(?<![\\(])\\(lambda|mu|alpha|beta|gamma|delta|epsilon|theta|phi|psi|omega|sigma|pi|rho|tau|eta|zeta|Lambda|Gamma|Delta|Theta|Phi|Psi|Omega|Sigma|Pi|infty|sum|prod|int|sqrt|frac|vec|hat|nabla|partial|forall|exists|in|notin|subset|cup|cap|to|rightarrow|leq|geq|neq|approx|equiv|pm|times|div|cdot|mathbb|mathrm|lim|log|ln|sin|cos|tan)(?:\{[^}]*\})*(?:[_^](?:\{[^}]*\}|[a-zA-Z0-9]))*/g,
+      (match, cmd, offset) => {
+        // Check if already inside \( ... \)
+        const before = processedText.substring(Math.max(0, offset - 10), offset);
+        if (before.includes('\\(')) return match;
+        return '\\(' + match + '\\)';
+      }
+    );
+
+    const parts = processedText.split(/(\\\(.*?\\\)|\\\[.*?\\\])/g);
     return parts.map((part, index) => {
       if (part.startsWith('\\(') && part.endsWith('\\)')) {
-        return <InlineMath key={index} math={part.slice(2, -2)} />;
+        const math = part.slice(2, -2).trim();
+        try {
+          return <InlineMath key={index} math={math} />;
+        } catch (e) {
+          return <span key={index} style={{color: '#f87171', fontFamily: 'monospace'}}>{math}</span>;
+        }
       } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
-        return <BlockMath key={index} math={part.slice(2, -2)} />;
+        const math = part.slice(2, -2).trim();
+        try {
+          return <BlockMath key={index} math={math} />;
+        } catch (e) {
+          return <span key={index} style={{color: '#f87171', fontFamily: 'monospace'}}>{math}</span>;
+        }
       }
       return <span key={index}>{part}</span>;
     });
