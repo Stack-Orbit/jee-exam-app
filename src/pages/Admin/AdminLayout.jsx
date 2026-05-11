@@ -1,9 +1,15 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, FileSignature, LogOut } from 'lucide-react';
 import '../../dashboard.css';
 
 function AdminLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('jee_admin_auth');
+    navigate('/');
+  };
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
@@ -39,10 +45,10 @@ function AdminLayout() {
           ))}
         </nav>
 
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', textDecoration: 'none', color: '#ef4444', marginTop: 'auto' }}>
+        <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'none', border: 'none', color: '#ef4444', marginTop: 'auto', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', borderRadius: '10px', width: '100%' }}>
           <LogOut size={20} />
           <span style={{ fontWeight: 500 }}>Exit Admin</span>
-        </Link>
+        </button>
       </aside>
 
       {/* Main Content */}
