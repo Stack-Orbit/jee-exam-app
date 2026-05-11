@@ -5,8 +5,8 @@
       "destination": "/landing/$1"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "source": "/nvidia-proxy/:path*",
+      "destination": "https://integrate.api.nvidia.com/:path*"
     },
     {
       "source": "/(.*)",

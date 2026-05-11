@@ -8,10 +8,10 @@ import { InlineMath, BlockMath } from 'react-katex';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-// Determine API base URL: Vite proxy for local dev, Vercel serverless function for production
+// Determine API base URL: Vite proxy for local dev, Vercel rewrite proxy for production
 const NVIDIA_BASE_URL = import.meta.env.DEV
   ? '/api/nvidia/v1'
-  : '/api/nvidia';
+  : '/nvidia-proxy/v1';
 
 
 function AITestGenerator() {
