@@ -1,24 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Key, Image as ImageIcon } from 'lucide-react';
-import OpenAI from 'openai';
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import { GoogleGenAI } from '@google/genai';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-
-// Determine API base URL: Vite proxy for local dev, Vercel rewrite proxy for production
-const NVIDIA_BASE_URL = import.meta.env.DEV
-  ? '/api/nvidia/v1'
-  : `${window.location.origin}/nvidia-proxy/v1`;
 
 
 function AITestGenerator() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_NVIDIA_API_KEY || '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');
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyAM_5oCG_CPk4qSddwoOXQi0CGLdaY8gqs');
   const [generatedTest, setGeneratedTest] = useState(null);
   const [progress, setProgress] = useState('');
   const [timer, setTimer] = useState(0);
@@ -89,9 +80,9 @@ function AITestGenerator() {
     setError('');
     try {
       const base64Data = await fileToBase64(percentileFile);
-      const client = new OpenAI({ apiKey: apiKey, baseURL: NVIDIA_BASE_URL, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 120000 });
+      const ai = new GoogleGenAI({ apiKey: apiKey });
       const prompt = `Extract the Marks vs Percentile table from this image.
-Return ONLY a strict JSON object (no markdown, no explanation) with:
+Return a strict JSON object with:
 {
   "percentiles": [array of numbers, e.g. 99, 98.5, 98],
   "tests": [
@@ -100,21 +91,17 @@ Return ONLY a strict JSON object (no markdown, no explanation) with:
 }
 Ensure the order of marks perfectly matches the order of the percentiles.`;
 
-      const response = await client.chat.completions.create({
-        model: 'google/gemma-4-31b-it',
-        messages: [
-          { role: 'user', content: [
-            { type: 'image_url', image_url: { url: `data:${percentileFile.type};base64,${base64Data}` } },
-            { type: 'text', text: prompt }
-          ]}
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [ { inlineData: { data: base64Data, mimeType: percentileFile.type } }, { text: prompt } ] }
         ],
-        temperature: 0.1,
-        max_tokens: 4096
+        config: {
+          temperature: 0.1,
+          responseMimeType: "application/json",
+        }
       });
-      let resultText = response.choices[0].message.content;
-      // Strip any markdown fencing the model might add
-      resultText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const data = JSON.parse(resultText);
+      const data = JSON.parse(response.text);
       setPercentileData(data);
     } catch (err) {
       setError('Failed to extract percentile data. ' + err.message);
@@ -140,87 +127,85 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
     setProgress('Reading PDF file...');
 
     try {
-      // ── STEP 1: Convert PDF pages to images ──
-      setProgress('Converting PDF to optimized images...');
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const images = [];
-      const PAGES_PER_IMAGE = 3; // Stitch 3 pages per image to minimize payload
-      const RENDER_SCALE = 1.0;  // Keep legible but small
-      const JPEG_QUALITY = 0.5;  // Aggressive compression
-      
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += PAGES_PER_IMAGE) {
-        const endPage = Math.min(pageNum + PAGES_PER_IMAGE - 1, pdf.numPages);
-        setProgress(`Rendering PDF pages ${pageNum}-${endPage} of ${pdf.numPages}...`);
-        
-        // Collect all pages in this batch
-        const pages = [];
-        const viewports = [];
-        for (let p = pageNum; p <= endPage; p++) {
-          const pg = await pdf.getPage(p);
-          pages.push(pg);
-          viewports.push(pg.getViewport({ scale: RENDER_SCALE }));
-        }
+      // ── STEP 1: Read PDF as base64 (Gemini handles PDFs natively!) ──
+      setProgress('Preparing PDF for AI analysis...');
+      const base64Data = await fileToBase64(file);
 
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(...viewports.map(v => v.width));
-        canvas.height = viewports.reduce((sum, v) => sum + v.height, 0);
-        const ctx = canvas.getContext('2d');
-        
-        let yOffset = 0;
-        for (let i = 0; i < pages.length; i++) {
-          await pages[i].render({ canvasContext: ctx, viewport: viewports[i], transform: [1, 0, 0, 1, 0, yOffset] }).promise;
-          yOffset += viewports[i].height;
-        }
-        images.push(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
-      }
-      
-      // Log payload stats for debugging
-      const totalPayloadKB = images.reduce((sum, img) => sum + img.length, 0) / 1024;
-      console.log(`PDF converted: ${images.length} images, ~${(totalPayloadKB / 1024).toFixed(1)}MB total payload`);
+      // ── STEP 2: Connect to Gemini 2.5 Flash ──
+      setProgress('Connecting to Gemini 2.5 Flash AI Engine...');
+      const ai = new GoogleGenAI({ apiKey: apiKey });
 
-      // ── STEP 2: Connect to Gemma 4 31B on NVIDIA ──
-      setProgress('Connecting to Gemma 4 31B AI Engine...');
-      const client = new OpenAI({ apiKey: apiKey, baseURL: NVIDIA_BASE_URL, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 300000 });
-
-      setProgress('Analyzing document structure and extracting all 75 questions... (This may take 1-2 minutes)');
+      setProgress('Analyzing document structure and extracting all 75 questions... (This may take 30-60 seconds)');
 
       // ── STEP 3: Ultra-precise extraction prompt ──
-      const prompt = 'You are an expert JEE exam parser. You will receive images of a JEE Main exam paper. Your job is to extract ALL 75 questions into a JSON array with ZERO mistakes.\n\nSTRUCTURE OF A JEE MAIN PAPER:\n- Physics: Questions 1-20 (MCQ, Section 1) + Questions 21-25 (Numerical, Section 2)\n- Chemistry: Questions 26-45 (MCQ, Section 1) + Questions 46-50 (Numerical, Section 2)\n- Mathematics: Questions 51-70 (MCQ, Section 1) + Questions 71-75 (Numerical, Section 2)\n\nABSOLUTE RULES:\n\n1. EXTRACT EXACTLY 75 QUESTIONS. Use GLOBAL numbering 1 to 75. NEVER reset numbering.\n\n2. SECTION NAMES must follow this format exactly:\n   - "Physics Section 1", "Physics Section 2"\n   - "Chemistry Section 1", "Chemistry Section 2"\n   - "Mathematics Section 1", "Mathematics Section 2"\n\n3. QUESTION TYPES:\n   - Questions 1-20, 26-45, 51-70: type "single_correct" (MCQ with 4 options A/B/C/D)\n   - Questions 21-25, 46-50, 71-75: type "numerical" (integer answer, NO options)\n\n4. LaTeX FORMATTING:\n   - ALL math must use LaTeX delimiters: \\\\( ... \\\\) for inline, \\\\[ ... \\\\] for display\n   - In JSON strings, double-escape every backslash: write \\\\\\\\( not \\\\(, write \\\\\\\\frac not \\\\frac\n   - Example: "text": "If \\\\\\\\( x^2 + y^2 = 1 \\\\\\\\), find \\\\\\\\( \\\\\\\\frac{dy}{dx} \\\\\\\\)"\n\n5. CORRECT ANSWER:\n   - For MCQ: set "correctOption" to "A", "B", "C", or "D" based on the answer key in the paper\n   - For numerical: set "correctOption" to the numerical answer as a string (e.g. "42")\n\n6. DIAGRAMS/IMAGES: If a question or option has a diagram/graph/circuit/figure, set "needsScreenshot": true\n\n7. DO NOT include page headers, footers, watermarks, or instructions.\n\nOUTPUT FORMAT - Return ONLY this JSON array, nothing else:\n[\n  {\n    "sectionName": "Physics Section 1",\n    "questionNumber": 1,\n    "text": "Question text with \\\\\\\\( LaTeX \\\\\\\\) math...",\n    "needsScreenshot": false,\n    "options": [\n      { "id": "A", "text": "Option text...", "needsScreenshot": false },\n      { "id": "B", "text": "Option text...", "needsScreenshot": false },\n      { "id": "C", "text": "Option text...", "needsScreenshot": false },\n      { "id": "D", "text": "Option text...", "needsScreenshot": false }\n    ],\n    "correctOption": "A",\n    "type": "single_correct"\n  },\n  {\n    "sectionName": "Physics Section 2",\n    "questionNumber": 21,\n    "text": "Numerical question text...",\n    "needsScreenshot": false,\n    "options": [],\n    "correctOption": "42",\n    "type": "numerical"\n  }\n]\n\nRESPOND WITH ONLY THE JSON ARRAY. NO markdown fences. NO explanations. JUST raw JSON starting with [ and ending with ].';
+      const prompt = `You are an expert AI trained to perfectly extract and parse JEE exam papers from a PDF into a highly structured JSON format. 
+Your task is to parse the ENTIRE uploaded JEE exam paper (exactly 75 questions) and meticulously extract every single question.
 
-      // ── STEP 4: Build the multimodal message ──
-      const contentArray = images.map(img => ({
-        type: "image_url",
-        image_url: { url: img }
-      }));
-      contentArray.push({ type: "text", text: prompt });
+CRITICAL RULES:
+1. EXTRACT ALL 75 QUESTIONS. You must use GLOBAL numbering from 1 to 75 for the 'questionNumber' field. Do NOT reset the question number back to 1 when a new section starts.
+2. SECTION NAMES must follow this format exactly:
+   - "Physics Section 1", "Physics Section 2"
+   - "Chemistry Section 1", "Chemistry Section 2"
+   - "Mathematics Section 1", "Mathematics Section 2"
+3. QUESTION TYPES:
+   - Questions 1-20, 26-45, 51-70: type "single_correct" (MCQ with 4 options A/B/C/D)
+   - Questions 21-25, 46-50, 71-75: type "numerical" (integer answer, NO options)
+4. For ANY math equations or symbols, you MUST use LaTeX formatting. 
+5. IN JSON, YOU MUST DOUBLE-ESCAPE EVERY BACKSLASH! Write '\\\\(' instead of '\\('. Write '\\\\[' instead of '\\['. Write '\\\\frac' instead of '\\frac'. 
+   - Incorrect: "text": "\\( x^2 \\)"
+   - Correct: "text": "\\\\( x^2 \\\\)"
+6. The PDF often contains the answer key at the bottom of each question. 
+7. IMAGES & SCREENSHOTS: If a question or an option contains a graphical image, diagram, or chart that cannot be represented by text/LaTeX, you MUST set "needsScreenshot": true for that item.
+8. NO REPETITIVE TEXT: Do NOT repeat the same words or phrases. Ignore page headers/footers/watermarks.
 
-      const response = await client.chat.completions.create({
-        model: 'google/gemma-4-31b-it',
-        messages: [
-          { role: 'system', content: 'You are a JEE exam paper parser. You MUST respond with ONLY a valid JSON array. No explanations, no apologies, no refusals. Parse the exam images and output JSON.' },
-          { role: 'user', content: contentArray }
+Ensure maximum reliability and no mistakes. Take your time to parse every page correctly.`;
+
+      // ── STEP 4: Send PDF directly to Gemini ──
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { data: base64Data, mimeType: 'application/pdf' } },
+              { text: prompt }
+            ]
+          }
         ],
-        temperature: 0.1,
-        max_tokens: 16384
+        config: {
+          temperature: 0.4,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                sectionName: { type: "STRING", description: "e.g., Physics Section 1" },
+                questionNumber: { type: "INTEGER" },
+                text: { type: "STRING" },
+                needsScreenshot: { type: "BOOLEAN" },
+                options: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      id: { type: "STRING" },
+                      text: { type: "STRING" },
+                      needsScreenshot: { type: "BOOLEAN" }
+                    }
+                  }
+                },
+                correctOption: { type: "STRING" },
+                type: { type: "STRING" }
+              }
+            }
+          }
+        }
       });
 
-      // ── STEP 5: Parse and clean response ──
+      // ── STEP 5: Parse response ──
       setProgress('Formatting results...');
-      let resultText = response.choices[0].message.content;
-      // Strip any thinking blocks or markdown fencing
-      resultText = resultText.replace(/<think>[\s\S]*?<\/think>\n*/g, '');
-      resultText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      // Find the JSON array in the response
-      const jsonStart = resultText.indexOf('[');
-      const jsonEnd = resultText.lastIndexOf(']');
-      if (jsonStart === -1 || jsonEnd === -1) {
-        // Model didn't return JSON — show what it actually said
-        console.error('Model response (not JSON):', resultText);
-        throw new Error('AI did not return valid JSON. Model said: "' + resultText.substring(0, 120) + '..."');
-      }
-      resultText = resultText.substring(jsonStart, jsonEnd + 1);
-      const parsedQuestions = JSON.parse(resultText);
+      const parsedQuestions = JSON.parse(response.text);
       
       // Rebuild the sections array in JavaScript from the flat questions
       // AND enforce hardcoded Numerical ranges (21-25, 46-50, 71-75)
@@ -389,7 +374,7 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
             <h4 style={{ margin: '0 0 5px 0', color: '#f59e0b' }}>API Key Required</h4>
             <input 
               type="password" 
-              placeholder="Enter NVIDIA API Key" 
+              placeholder="Enter Gemini API Key" 
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               style={{ width: '100%', maxWidth: '400px', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' }}
