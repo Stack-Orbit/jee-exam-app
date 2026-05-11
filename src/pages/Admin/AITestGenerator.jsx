@@ -1,14 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Key, Image as ImageIcon } from 'lucide-react';
-import { GoogleGenAI, Type } from '@google/genai';
+import OpenAI from 'openai';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+// Determine API base URL: Vite proxy for local dev, Vercel serverless function for production
+const NVIDIA_BASE_URL = import.meta.env.DEV
+  ? '/api/nvidia/v1'
+  : '/api/nvidia';
+
 
 function AITestGenerator() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyAM_5oCG_CPk4qSddwoOXQi0CGLdaY8gqs');
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_NVIDIA_API_KEY || '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');
   const [generatedTest, setGeneratedTest] = useState(null);
   const [progress, setProgress] = useState('');
   const [timer, setTimer] = useState(0);
@@ -72,16 +82,16 @@ function AITestGenerator() {
 
   const processPercentileImage = async () => {
     if (!apiKey) {
-      setError('Please provide a Gemini API Key.');
+      setError('Please provide an API Key.');
       return;
     }
     setIsProcessingPercentile(true);
     setError('');
     try {
       const base64Data = await fileToBase64(percentileFile);
-      const ai = new GoogleGenAI({ apiKey: apiKey });
-      const prompt = `Extract the Marks vs Percentile table from this image. 
-Return a strict JSON object with:
+      const client = new OpenAI({ apiKey: apiKey, baseURL: NVIDIA_BASE_URL, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 120000 });
+      const prompt = `Extract the Marks vs Percentile table from this image.
+Return ONLY a strict JSON object (no markdown, no explanation) with:
 {
   "percentiles": [array of numbers, e.g. 99, 98.5, 98],
   "tests": [
@@ -90,17 +100,21 @@ Return a strict JSON object with:
 }
 Ensure the order of marks perfectly matches the order of the percentiles.`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: [
-          { role: 'user', parts: [ { inlineData: { data: base64Data, mimeType: percentileFile.type } }, { text: prompt } ] }
+      const response = await client.chat.completions.create({
+        model: 'google/gemma-4-31b-it',
+        messages: [
+          { role: 'user', content: [
+            { type: 'image_url', image_url: { url: `data:${percentileFile.type};base64,${base64Data}` } },
+            { type: 'text', text: prompt }
+          ]}
         ],
-        config: {
-          temperature: 0.1,
-          responseMimeType: "application/json",
-        }
+        temperature: 0.1,
+        max_tokens: 4096
       });
-      const data = JSON.parse(response.text);
+      let resultText = response.choices[0].message.content;
+      // Strip any markdown fencing the model might add
+      resultText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const data = JSON.parse(resultText);
       setPercentileData(data);
     } catch (err) {
       setError('Failed to extract percentile data. ' + err.message);
@@ -115,7 +129,7 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
       return;
     }
     if (!apiKey) {
-      setError('Please provide a Gemini API Key.');
+      setError('Please provide an API Key.');
       return;
     }
 
@@ -126,73 +140,75 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
     setProgress('Reading PDF file...');
 
     try {
-      const base64Data = await fileToBase64(file);
-      setProgress('Connecting to AI Engine...');
+      // ── STEP 1: Convert PDF pages to images ──
+      setProgress('Converting PDF to high-res images...');
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const images = [];
       
-      const ai = new GoogleGenAI({ apiKey: apiKey });
-
-      setProgress('Analyzing document structure and extracting all 75 questions... (This will take up to 60 seconds)');
-
-      const prompt = `You are an expert AI trained to perfectly extract and parse JEE exam papers from a PDF into a highly structured JSON format. 
-Your task is to parse the ENTIRE uploaded JEE exam paper (exactly 75 questions) and meticulously extract every single question, segregating them exactly by their corresponding Subject/Section as given in the PDF (e.g., Physics Section 1, Chemistry Section 2).
-
-CRITICAL RULES:
-1. EXTRACT ALL 75 QUESTIONS. You must use GLOBAL numbering from 1 to 75 for the 'questionNumber' field. Do NOT reset the question number back to 1 when a new section starts.
-2. For ANY math equations or symbols, you MUST use LaTeX formatting. 
-3. IN JSON, YOU MUST DOUBLE-ESCAPE EVERY BACKSLASH! Write '\\\\(' instead of '\\('. Write '\\\\[' instead of '\\['. Write '\\\\frac' instead of '\\frac'. 
-   - Incorrect: "text": "\\( x^2 \\)"
-   - Correct: "text": "\\\\( x^2 \\\\)"
-4. ESCAPE ALL DOUBLE QUOTES inside the text fields!
-5. The PDF often contains the answer key at the bottom of each question. 
-6. IMAGES & SCREENSHOTS: If a question or an option contains a graphical image, diagram, or chart that cannot be represented by text/LaTeX, you MUST set "needsScreenshot": true for that item.
-7. NO REPETITIVE TEXT: Do NOT repeat the same words or phrases. Ignore page headers/footers/watermarks.
-
-Ensure maximum reliability and no mistakes. Take your time to parse every page correctly.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { inlineData: { data: base64Data, mimeType: 'application/pdf' } },
-              { text: prompt }
-            ]
-          }
-        ],
-        config: {
-          temperature: 0.4,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                sectionName: { type: Type.STRING, description: "e.g., Physics Section 1" },
-                questionNumber: { type: Type.INTEGER },
-                text: { type: Type.STRING },
-                needsScreenshot: { type: Type.BOOLEAN },
-                options: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      text: { type: Type.STRING },
-                      needsScreenshot: { type: Type.BOOLEAN }
-                    }
-                  }
-                },
-                correctOption: { type: Type.STRING },
-                type: { type: Type.STRING }
-              }
-            }
-          }
+      // Stitch 2 pages per image to stay under image limits
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 2) {
+        setProgress(`Rendering PDF pages ${pageNum}-${Math.min(pageNum + 1, pdf.numPages)} of ${pdf.numPages}...`);
+        const page1 = await pdf.getPage(pageNum);
+        const vp1 = page1.getViewport({ scale: 1.5 });
+        
+        let page2 = null;
+        let vp2 = null;
+        if (pageNum + 1 <= pdf.numPages) {
+          page2 = await pdf.getPage(pageNum + 1);
+          vp2 = page2.getViewport({ scale: 1.5 });
         }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(vp1.width, vp2 ? vp2.width : 0);
+        canvas.height = vp1.height + (vp2 ? vp2.height : 0);
+        const ctx = canvas.getContext('2d');
+        
+        await page1.render({ canvasContext: ctx, viewport: vp1 }).promise;
+        if (page2 && vp2) {
+          const renderCtx2 = { canvasContext: ctx, viewport: vp2, transform: [1, 0, 0, 1, 0, vp1.height] };
+          await page2.render(renderCtx2).promise;
+        }
+        images.push(canvas.toDataURL('image/jpeg', 0.7));
+      }
+
+      // ── STEP 2: Connect to Gemma 4 31B on NVIDIA ──
+      setProgress('Connecting to Gemma 4 31B AI Engine...');
+      const client = new OpenAI({ apiKey: apiKey, baseURL: NVIDIA_BASE_URL, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 300000 });
+
+      setProgress('Analyzing document structure and extracting all 75 questions... (This may take 1-2 minutes)');
+
+      // ── STEP 3: Ultra-precise extraction prompt ──
+      const prompt = 'You are an expert JEE exam parser. You will receive images of a JEE Main exam paper. Your job is to extract ALL 75 questions into a JSON array with ZERO mistakes.\n\nSTRUCTURE OF A JEE MAIN PAPER:\n- Physics: Questions 1-20 (MCQ, Section 1) + Questions 21-25 (Numerical, Section 2)\n- Chemistry: Questions 26-45 (MCQ, Section 1) + Questions 46-50 (Numerical, Section 2)\n- Mathematics: Questions 51-70 (MCQ, Section 1) + Questions 71-75 (Numerical, Section 2)\n\nABSOLUTE RULES:\n\n1. EXTRACT EXACTLY 75 QUESTIONS. Use GLOBAL numbering 1 to 75. NEVER reset numbering.\n\n2. SECTION NAMES must follow this format exactly:\n   - "Physics Section 1", "Physics Section 2"\n   - "Chemistry Section 1", "Chemistry Section 2"\n   - "Mathematics Section 1", "Mathematics Section 2"\n\n3. QUESTION TYPES:\n   - Questions 1-20, 26-45, 51-70: type "single_correct" (MCQ with 4 options A/B/C/D)\n   - Questions 21-25, 46-50, 71-75: type "numerical" (integer answer, NO options)\n\n4. LaTeX FORMATTING:\n   - ALL math must use LaTeX delimiters: \\\\( ... \\\\) for inline, \\\\[ ... \\\\] for display\n   - In JSON strings, double-escape every backslash: write \\\\\\\\( not \\\\(, write \\\\\\\\frac not \\\\frac\n   - Example: "text": "If \\\\\\\\( x^2 + y^2 = 1 \\\\\\\\), find \\\\\\\\( \\\\\\\\frac{dy}{dx} \\\\\\\\)"\n\n5. CORRECT ANSWER:\n   - For MCQ: set "correctOption" to "A", "B", "C", or "D" based on the answer key in the paper\n   - For numerical: set "correctOption" to the numerical answer as a string (e.g. "42")\n\n6. DIAGRAMS/IMAGES: If a question or option has a diagram/graph/circuit/figure, set "needsScreenshot": true\n\n7. DO NOT include page headers, footers, watermarks, or instructions.\n\nOUTPUT FORMAT - Return ONLY this JSON array, nothing else:\n[\n  {\n    "sectionName": "Physics Section 1",\n    "questionNumber": 1,\n    "text": "Question text with \\\\\\\\( LaTeX \\\\\\\\) math...",\n    "needsScreenshot": false,\n    "options": [\n      { "id": "A", "text": "Option text...", "needsScreenshot": false },\n      { "id": "B", "text": "Option text...", "needsScreenshot": false },\n      { "id": "C", "text": "Option text...", "needsScreenshot": false },\n      { "id": "D", "text": "Option text...", "needsScreenshot": false }\n    ],\n    "correctOption": "A",\n    "type": "single_correct"\n  },\n  {\n    "sectionName": "Physics Section 2",\n    "questionNumber": 21,\n    "text": "Numerical question text...",\n    "needsScreenshot": false,\n    "options": [],\n    "correctOption": "42",\n    "type": "numerical"\n  }\n]\n\nRESPOND WITH ONLY THE JSON ARRAY. NO markdown fences. NO explanations. JUST raw JSON starting with [ and ending with ].';
+
+      // ── STEP 4: Build the multimodal message ──
+      const contentArray = images.map(img => ({
+        type: "image_url",
+        image_url: { url: img }
+      }));
+      contentArray.push({ type: "text", text: prompt });
+
+      const response = await client.chat.completions.create({
+        model: 'google/gemma-4-31b-it',
+        messages: [
+          { role: 'user', content: contentArray }
+        ],
+        temperature: 0.1,
+        max_tokens: 16384
       });
 
+      // ── STEP 5: Parse and clean response ──
       setProgress('Formatting results...');
-      let resultText = response.text;
+      let resultText = response.choices[0].message.content;
+      // Strip any thinking blocks or markdown fencing
+      resultText = resultText.replace(/<think>[\s\S]*?<\/think>\n*/g, '');
+      resultText = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      // Find the JSON array in the response
+      const jsonStart = resultText.indexOf('[');
+      const jsonEnd = resultText.lastIndexOf(']');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        resultText = resultText.substring(jsonStart, jsonEnd + 1);
+      }
       const parsedQuestions = JSON.parse(resultText);
       
       // Rebuild the sections array in JavaScript from the flat questions
@@ -362,7 +378,7 @@ Ensure maximum reliability and no mistakes. Take your time to parse every page c
             <h4 style={{ margin: '0 0 5px 0', color: '#f59e0b' }}>API Key Required</h4>
             <input 
               type="password" 
-              placeholder="Enter Gemini API Key" 
+              placeholder="Enter NVIDIA API Key" 
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               style={{ width: '100%', maxWidth: '400px', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' }}
@@ -440,7 +456,7 @@ Ensure maximum reliability and no mistakes. Take your time to parse every page c
             <div style={{ marginTop: '15px', textAlign: 'center', color: '#c084fc', fontSize: '0.9rem' }}>
               <p>{progress}</p>
               <p style={{ marginTop: '5px', opacity: 0.8, fontWeight: 'bold' }}>
-                Estimated Time Remaining: {Math.max(0, 60 - timer)}s
+                Estimated Time Remaining: {Math.max(0, 120 - timer)}s
               </p>
             </div>
           )}
