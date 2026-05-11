@@ -206,6 +206,7 @@ RULES:
         ],
         config: {
           temperature: 0.4,
+          maxOutputTokens: 65536,
           responseMimeType: "application/json",
           responseSchema: {
             type: "ARRAY",
