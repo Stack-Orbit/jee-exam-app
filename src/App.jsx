@@ -9,6 +9,7 @@ import AdminLayout from './pages/Admin/AdminLayout';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import AdminAccounts from './pages/Admin/AdminAccounts';
 import AITestGenerator from './pages/Admin/AITestGenerator';
+import AITestGeneratorII from './pages/Admin/AITestGeneratorII';
 import AdminLogin from './pages/Admin/AdminLogin';
 import StudentLogin from './pages/StudentLogin';
 
@@ -51,6 +52,7 @@ function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="accounts" element={<AdminAccounts />} />
           <Route path="ai-generator" element={<AITestGenerator />} />
+          <Route path="ai-generator-2" element={<AITestGeneratorII />} />
         </Route>
       </Routes>
     </BrowserRouter>
