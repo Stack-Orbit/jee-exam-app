@@ -236,7 +236,9 @@ function Exam() {
         if (val === 'Backspace') currentAns = currentAns.slice(0, -1);
         else if (val === 'Clear All') currentAns = '';
         else if (val !== 'Left' && val !== 'Right') currentAns += val;
-        return { ...q, userAnswer: currentAns };
+        
+        const newStatus = currentAns.length > 0 ? 'answered' : 'not-answered';
+        return { ...q, userAnswer: currentAns, status: newStatus };
       }
       return q;
     }));
@@ -523,7 +525,7 @@ function Exam() {
                           checked={isUserAns}
                           onChange={() => {
                             if (mode === 'exam') {
-                              setQuestions(prev => prev.map(q => q.id === activeQuestion ? { ...q, userAnswer: opt.id } : q));
+                              setQuestions(prev => prev.map(q => q.id === activeQuestion ? { ...q, userAnswer: opt.id, status: 'answered' } : q));
                             }
                           }}
                           disabled={mode !== 'exam'}

@@ -315,33 +315,18 @@ function renderSingleAnalysis(testData, resultData, navigate) {
       const pts = testData.percentileMapping.percentiles;
       const mks = testData.percentileMapping.marks;
       // create points array and sort by marks ascending
-      let dataPoints = pts.map((p, i) => ({ pct: parseFloat(p), mark: parseFloat(mks[i]) })).sort((a,b) => a.mark - b.mark);
+      let dataPoints = pts.map((p, i) => ({ pct: parseFloat(p), mark: parseFloat(mks[i]) }))
+          .filter(d => !isNaN(d.pct) && !isNaN(d.mark))
+          .sort((a,b) => a.mark - b.mark);
       
-      let mark90 = dataPoints[0].mark;
-      let mark99 = dataPoints[dataPoints.length - 1].mark;
-      
-      const pt90 = dataPoints.find(d => d.pct === 90);
-      if (pt90) mark90 = pt90.mark;
-      else {
-          let closest = dataPoints.reduce((prev, curr) => Math.abs(curr.pct - 90) < Math.abs(prev.pct - 90) ? curr : prev);
-          mark90 = closest.mark;
-      }
+      if (dataPoints.length > 0) {
+          if (dataPoints[0].mark > 0) {
+              dataPoints.unshift({ pct: Math.max(0, dataPoints[0].pct - 20), mark: 0 }); // rough estimate for 0 marks
+          }
+          if (dataPoints[dataPoints.length - 1].mark < 300) {
+              dataPoints.push({ pct: 100, mark: 300 });
+          }
 
-      const pt99 = dataPoints.find(d => d.pct === 99);
-      if (pt99) mark99 = pt99.mark;
-      else {
-          let closest = dataPoints.reduce((prev, curr) => Math.abs(curr.pct - 99) < Math.abs(prev.pct - 99) ? curr : prev);
-          mark99 = closest.mark;
-      }
-
-      if (totalMarks < mark90) {
-          predictedPercentileDisplay = "Do more hardwork";
-          percentileSubtext = `Below 90 %ile (${testData.percentileMapping.mappingName})`;
-      } else if (totalMarks >= mark99) {
-          predictedPercentileDisplay = "> 99 %ile";
-          percentileSubtext = `Excellent! (${testData.percentileMapping.mappingName})`;
-      } else {
-          // Linear interpolation
           let lower = dataPoints[0];
           let upper = dataPoints[dataPoints.length - 1];
           for (let i = 0; i < dataPoints.length - 1; i++) {
@@ -356,9 +341,11 @@ function renderSingleAnalysis(testData, resultData, navigate) {
           } else {
               const ratio = (totalMarks - lower.mark) / (upper.mark - lower.mark);
               const interp = lower.pct + ratio * (upper.pct - lower.pct);
-              predictedPercentileDisplay = interp.toFixed(2) + " %ile";
+              predictedPercentileDisplay = Math.min(100, Math.max(0, interp)).toFixed(2) + " %ile";
           }
-          percentileSubtext = `Shift: ${testData.percentileMapping.mappingName}`;
+          percentileSubtext = `Based on: ${testData.percentileMapping.mappingName}`;
+      } else {
+          predictedPercentileDisplay = Math.min(99.9, Math.max(40, (totalMarks / 300) * 100 + 40)).toFixed(1) + " %ile";
       }
   } else {
       predictedPercentileDisplay = Math.min(99.9, Math.max(40, (totalMarks / 300) * 100 + 40)).toFixed(1) + " %ile";
