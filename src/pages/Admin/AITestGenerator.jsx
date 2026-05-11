@@ -141,36 +141,43 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
 
     try {
       // ── STEP 1: Convert PDF pages to images ──
-      setProgress('Converting PDF to high-res images...');
+      setProgress('Converting PDF to optimized images...');
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const images = [];
+      const PAGES_PER_IMAGE = 3; // Stitch 3 pages per image to minimize payload
+      const RENDER_SCALE = 1.0;  // Keep legible but small
+      const JPEG_QUALITY = 0.5;  // Aggressive compression
       
-      // Stitch 2 pages per image to stay under image limits
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 2) {
-        setProgress(`Rendering PDF pages ${pageNum}-${Math.min(pageNum + 1, pdf.numPages)} of ${pdf.numPages}...`);
-        const page1 = await pdf.getPage(pageNum);
-        const vp1 = page1.getViewport({ scale: 1.5 });
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += PAGES_PER_IMAGE) {
+        const endPage = Math.min(pageNum + PAGES_PER_IMAGE - 1, pdf.numPages);
+        setProgress(`Rendering PDF pages ${pageNum}-${endPage} of ${pdf.numPages}...`);
         
-        let page2 = null;
-        let vp2 = null;
-        if (pageNum + 1 <= pdf.numPages) {
-          page2 = await pdf.getPage(pageNum + 1);
-          vp2 = page2.getViewport({ scale: 1.5 });
+        // Collect all pages in this batch
+        const pages = [];
+        const viewports = [];
+        for (let p = pageNum; p <= endPage; p++) {
+          const pg = await pdf.getPage(p);
+          pages.push(pg);
+          viewports.push(pg.getViewport({ scale: RENDER_SCALE }));
         }
 
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(vp1.width, vp2 ? vp2.width : 0);
-        canvas.height = vp1.height + (vp2 ? vp2.height : 0);
+        canvas.width = Math.max(...viewports.map(v => v.width));
+        canvas.height = viewports.reduce((sum, v) => sum + v.height, 0);
         const ctx = canvas.getContext('2d');
         
-        await page1.render({ canvasContext: ctx, viewport: vp1 }).promise;
-        if (page2 && vp2) {
-          const renderCtx2 = { canvasContext: ctx, viewport: vp2, transform: [1, 0, 0, 1, 0, vp1.height] };
-          await page2.render(renderCtx2).promise;
+        let yOffset = 0;
+        for (let i = 0; i < pages.length; i++) {
+          await pages[i].render({ canvasContext: ctx, viewport: viewports[i], transform: [1, 0, 0, 1, 0, yOffset] }).promise;
+          yOffset += viewports[i].height;
         }
-        images.push(canvas.toDataURL('image/jpeg', 0.7));
+        images.push(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
       }
+      
+      // Log payload stats for debugging
+      const totalPayloadKB = images.reduce((sum, img) => sum + img.length, 0) / 1024;
+      console.log(`PDF converted: ${images.length} images, ~${(totalPayloadKB / 1024).toFixed(1)}MB total payload`);
 
       // ── STEP 2: Connect to Gemma 4 31B on NVIDIA ──
       setProgress('Connecting to Gemma 4 31B AI Engine...');
@@ -191,6 +198,7 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
       const response = await client.chat.completions.create({
         model: 'google/gemma-4-31b-it',
         messages: [
+          { role: 'system', content: 'You are a JEE exam paper parser. You MUST respond with ONLY a valid JSON array. No explanations, no apologies, no refusals. Parse the exam images and output JSON.' },
           { role: 'user', content: contentArray }
         ],
         temperature: 0.1,
@@ -206,9 +214,12 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
       // Find the JSON array in the response
       const jsonStart = resultText.indexOf('[');
       const jsonEnd = resultText.lastIndexOf(']');
-      if (jsonStart !== -1 && jsonEnd !== -1) {
-        resultText = resultText.substring(jsonStart, jsonEnd + 1);
+      if (jsonStart === -1 || jsonEnd === -1) {
+        // Model didn't return JSON — show what it actually said
+        console.error('Model response (not JSON):', resultText);
+        throw new Error('AI did not return valid JSON. Model said: "' + resultText.substring(0, 120) + '..."');
       }
+      resultText = resultText.substring(jsonStart, jsonEnd + 1);
       const parsedQuestions = JSON.parse(resultText);
       
       // Rebuild the sections array in JavaScript from the flat questions
