@@ -265,45 +265,99 @@ function Exam() {
 
   const renderTextWithMath = (text) => {
     if (!text) return null;
+    
+    let processedText = text;
+    // Remove unsupported formatting wrappers
+    processedText = processedText.replace(/\\begin\{center\}/g, '');
+    processedText = processedText.replace(/\\end\{center\}/g, '');
+    processedText = processedText.replace(/\\renewcommand\{\\arraystretch\}\{[^{}]*\}/g, '');
+    
+    // Replace tabular with array for KaTeX support
+    processedText = processedText.replace(/\\begin\{tabular\}/g, '\\begin{array}');
+    processedText = processedText.replace(/\\end\{tabular\}/g, '\\end{array}');
+    
+    // Replace align* with aligned for KaTeX support inside block math
+    processedText = processedText.replace(/\\begin\{align\*\}/g, '\\begin{aligned}');
+    processedText = processedText.replace(/\\end\{align\*\}/g, '\\end{aligned}');
+    processedText = processedText.replace(/\\begin\{align\}/g, '\\begin{aligned}');
+    processedText = processedText.replace(/\\end\{align\}/g, '\\end{aligned}');
+
+    // Strip $ from INSIDE environments that are already math mode
+    const envs = ['aligned', 'array', 'bmatrix', 'pmatrix', 'matrix', 'cases', 'vmatrix', 'Vmatrix'];
+    const envRegex = new RegExp(`(\\\\begin\\{(?:${envs.join('|')})\\}(?:\\{[^}]*\\})?)([\\s\\S]*?)(\\\\end\\{(?:${envs.join('|')})\\})`, 'g');
+    processedText = processedText.replace(envRegex, (match, p1, p2, p3) => {
+      return p1 + p2.replace(/\\\$|\$/g, '') + p3;
+    });
+
+    // Remove unsupported graphic/spacing commands
+    processedText = processedText.replace(/\\rule\{[^}]*\}\{[^}]*\}/g, '_______');
+    processedText = processedText.replace(/\\vspace\{[^}]*\}/g, '');
+    processedText = processedText.replace(/\\includegraphics(?:\[[^\]]*\])?\{[^}]*\}/g, '');
+
     const segments = [];
     
-    // First pass: extract $$...$$ display math
-    const displayParts = text.split(/(\$\$[\s\S]*?\$\$)/g);
-    for (const dp of displayParts) {
-      if (dp.startsWith('$$') && dp.endsWith('$$')) {
-        segments.push({ type: 'display', math: dp.slice(2, -2).trim() });
+    // Regex to match block math, environments, and inline math
+    const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\begin\{[a-zA-Z*]+\}(?:\{[^}]*\})?[\s\S]*?\\end\{[a-zA-Z*]+\}|\$[^$]+?\$|\\\([\s\S]*?\\\))/g;
+    
+    const parts = processedText.split(mathRegex);
+    
+    for (const part of parts) {
+      if (!part) continue;
+      
+      if (part.startsWith('$$') && part.endsWith('$$')) {
+        segments.push({ type: 'display', math: part.slice(2, -2).trim() });
+      } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
+        segments.push({ type: 'display', math: part.slice(2, -2).trim() });
+      } else if (part.startsWith('\\begin{')) {
+        segments.push({ type: 'display', math: part.trim() });
+      } else if (part.startsWith('$') && part.endsWith('$')) {
+        segments.push({ type: 'inline', math: part.slice(1, -1).trim() });
+      } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
+        segments.push({ type: 'inline', math: part.slice(2, -2).trim() });
       } else {
-        // Second pass: extract $...$ inline math
-        const inlineParts = dp.split(/(\$[^$]+?\$)/g);
-        for (const ip of inlineParts) {
-          if (ip.startsWith('$') && ip.endsWith('$') && ip.length > 2) {
-            segments.push({ type: 'inline', math: ip.slice(1, -1).trim() });
-          } else if (ip) {
-            // Legacy: also handle \\( ... \\) patterns
-            const legacyParts = ip.split(/(\\\\?\\\(.*?\\\\?\\\)|\\\\?\\\[.*?\\\\?\\\])/g);
-            for (const lp of legacyParts) {
-              if (/^\\\\?\\\(/.test(lp)) {
-                segments.push({ type: 'inline', math: lp.replace(/^\\\\?\\\(/, '').replace(/\\\\?\\\)$/, '').trim() });
-              } else if (/^\\\\?\\\[/.test(lp)) {
-                segments.push({ type: 'display', math: lp.replace(/^\\\\?\\\[/, '').replace(/\\\\?\\\]$/, '').trim() });
-              } else if (lp) {
-                segments.push({ type: 'text', content: lp });
-              }
-            }
-          }
-        }
+        // legacy handling for un-parsed text if any
+        segments.push({ type: 'text', content: part });
       }
     }
     
     return segments.map((seg, index) => {
-      if (seg.type === 'display') {
-        try { return <BlockMath key={index} math={seg.math} />; }
-        catch (e) { return <span key={index} style={{fontFamily:'monospace'}}>{seg.math}</span>; }
-      } else if (seg.type === 'inline') {
-        try { return <InlineMath key={index} math={seg.math} />; }
-        catch (e) { return <span key={index} style={{fontFamily:'monospace'}}>{seg.math}</span>; }
+      if (seg.type === 'display' || seg.type === 'inline') {
+        let mathStr = seg.math;
+        // Convert text formatting to math formatting to prevent KaTeX errors with nested math
+        mathStr = mathStr.replace(/\\textbf\s*\{/g, '\\mathbf{');
+        mathStr = mathStr.replace(/\\textit\s*\{/g, '\\mathit{');
+        
+        if (seg.type === 'display') {
+          try { return <BlockMath key={index} math={mathStr} />; }
+          catch (e) { return <span key={index} style={{fontFamily:'monospace', color:'#f87171'}}>{seg.math}</span>; }
+        } else {
+          try { return <InlineMath key={index} math={mathStr} />; }
+          catch (e) { return <span key={index} style={{fontFamily:'monospace', color:'#f87171'}}>{seg.math}</span>; }
+        }
       }
-      return <span key={index}>{seg.content}</span>;
+      
+      let textStr = seg.content;
+      // Strip formatting commands from plain text so they don't render literally
+      textStr = textStr.replace(/\\textbf\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\textit\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\underline\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+      
+      // For text, we can also split by \\ to render newlines
+      const lines = textStr.split('\\\\');
+      if (lines.length > 1) {
+        return (
+          <span key={index}>
+            {lines.map((line, lIdx) => (
+              <span key={lIdx}>
+                {line}
+                {lIdx < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </span>
+        );
+      }
+      return <span key={index}>{textStr}</span>;
     });
   };
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Key, Image as ImageIcon } from 'lucide-react';
+import Tesseract from 'tesseract.js';
 import { GoogleGenAI } from '@google/genai';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -164,10 +165,10 @@ Return a strict JSON object with:
 {
   "percentiles": [array of numbers, e.g. 99, 98.5, 98],
   "tests": [
-     { "name": "Column Header Name", "marks": [array of marks corresponding to the percentiles] }
+     { "name": "Exact Header Name (e.g. '2 April Morning')", "marks": [array of marks corresponding to the percentiles] }
   ]
 }
-Ensure the order of marks perfectly matches the order of the percentiles.`;
+You must extract the EXACT headers written above each column (e.g. "2 April Morning", "4 April Evening") and set them as the "name" for that column's data in the "tests" array. Ensure the order of marks perfectly matches the order of the percentiles. Do not truncate data.`;
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ inlineData: { data: base64Data, mimeType: percentileFile.type } }, { text: prompt }] }],
@@ -350,57 +351,96 @@ ${extractedText}`;
   const renderTextWithMath = (text) => {
     if (!text) return null;
     
-    // Split on $$...$$ (display) and $...$ (inline) math delimiters
-    // Process display math first, then inline
+    let processedText = text;
+    // Remove unsupported formatting wrappers
+    processedText = processedText.replace(/\\begin\{center\}/g, '');
+    processedText = processedText.replace(/\\end\{center\}/g, '');
+    processedText = processedText.replace(/\\renewcommand\{\\arraystretch\}\{[^{}]*\}/g, '');
+    
+    // Replace tabular with array for KaTeX support
+    processedText = processedText.replace(/\\begin\{tabular\}/g, '\\begin{array}');
+    processedText = processedText.replace(/\\end\{tabular\}/g, '\\end{array}');
+    
+    // Replace align* with aligned for KaTeX support inside block math
+    processedText = processedText.replace(/\\begin\{align\*\}/g, '\\begin{aligned}');
+    processedText = processedText.replace(/\\end\{align\*\}/g, '\\end{aligned}');
+    processedText = processedText.replace(/\\begin\{align\}/g, '\\begin{aligned}');
+    processedText = processedText.replace(/\\end\{align\}/g, '\\end{aligned}');
+
+    // Strip $ from INSIDE environments that are already math mode
+    const envs = ['aligned', 'array', 'bmatrix', 'pmatrix', 'matrix', 'cases', 'vmatrix', 'Vmatrix'];
+    const envRegex = new RegExp(`(\\\\begin\\{(?:${envs.join('|')})\\}(?:\\{[^}]*\\})?)([\\s\\S]*?)(\\\\end\\{(?:${envs.join('|')})\\})`, 'g');
+    processedText = processedText.replace(envRegex, (match, p1, p2, p3) => {
+      return p1 + p2.replace(/\\\$|\$/g, '') + p3;
+    });
+
+    // Remove unsupported graphic/spacing commands
+    processedText = processedText.replace(/\\rule\{[^}]*\}\{[^}]*\}/g, '_______');
+    processedText = processedText.replace(/\\vspace\{[^}]*\}/g, '');
+    processedText = processedText.replace(/\\includegraphics(?:\[[^\]]*\])?\{[^}]*\}/g, '');
+
     const segments = [];
-    let remaining = text;
     
-    // First pass: extract $$...$$ display math
-    const displayParts = remaining.split(/(\$\$[\s\S]*?\$\$)/g);
+    // Regex to match block math, environments, and inline math
+    const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\begin\{[a-zA-Z*]+\}(?:\{[^}]*\})?[\s\S]*?\\end\{[a-zA-Z*]+\}|\$[^$]+?\$|\\\([\s\S]*?\\\))/g;
     
-    for (const dp of displayParts) {
-      if (dp.startsWith('$$') && dp.endsWith('$$')) {
-        segments.push({ type: 'display', math: dp.slice(2, -2).trim() });
+    const parts = processedText.split(mathRegex);
+    
+    for (const part of parts) {
+      if (!part) continue;
+      
+      if (part.startsWith('$$') && part.endsWith('$$')) {
+        segments.push({ type: 'display', math: part.slice(2, -2).trim() });
+      } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
+        segments.push({ type: 'display', math: part.slice(2, -2).trim() });
+      } else if (part.startsWith('\\begin{')) {
+        segments.push({ type: 'display', math: part.trim() });
+      } else if (part.startsWith('$') && part.endsWith('$')) {
+        segments.push({ type: 'inline', math: part.slice(1, -1).trim() });
+      } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
+        segments.push({ type: 'inline', math: part.slice(2, -2).trim() });
       } else {
-        // Second pass: extract $...$ inline math from non-display parts
-        const inlineParts = dp.split(/(\$[^$]+?\$)/g);
-        for (const ip of inlineParts) {
-          if (ip.startsWith('$') && ip.endsWith('$') && ip.length > 2) {
-            segments.push({ type: 'inline', math: ip.slice(1, -1).trim() });
-          } else if (ip) {
-            // Also check for legacy \\( ... \\) or \( ... \) patterns
-            const legacyParts = ip.split(/(\\*\\\([^)]*?\\*\\\)|\\*\\\[[^\]]*?\\*\\\])/g);
-            for (const lp of legacyParts) {
-              if (/^\\*\\\(/.test(lp)) {
-                const math = lp.replace(/^\\*\\\(/, '').replace(/\\*\\\)$/, '').trim();
-                segments.push({ type: 'inline', math });
-              } else if (/^\\*\\\[/.test(lp)) {
-                const math = lp.replace(/^\\*\\\[/, '').replace(/\\*\\\]$/, '').trim();
-                segments.push({ type: 'display', math });
-              } else if (lp) {
-                segments.push({ type: 'text', content: lp });
-              }
-            }
-          }
-        }
+        segments.push({ type: 'text', content: part });
       }
     }
     
     return segments.map((seg, index) => {
-      if (seg.type === 'display') {
-        try {
-          return <BlockMath key={index} math={seg.math} />;
-        } catch (e) {
-          return <span key={index} style={{color:'#f87171',fontFamily:'monospace'}}>{"$$" + seg.math + "$$"}</span>;
-        }
-      } else if (seg.type === 'inline') {
-        try {
-          return <InlineMath key={index} math={seg.math} />;
-        } catch (e) {
-          return <span key={index} style={{color:'#f87171',fontFamily:'monospace'}}>{"$" + seg.math + "$"}</span>;
+      if (seg.type === 'display' || seg.type === 'inline') {
+        let mathStr = seg.math;
+        // Convert text formatting to math formatting to prevent KaTeX errors with nested math
+        mathStr = mathStr.replace(/\\textbf\s*\{/g, '\\mathbf{');
+        mathStr = mathStr.replace(/\\textit\s*\{/g, '\\mathit{');
+        
+        if (seg.type === 'display') {
+          try { return <BlockMath key={index} math={mathStr} />; }
+          catch (e) { return <span key={index} style={{fontFamily:'monospace', color:'#f87171'}}>{seg.math}</span>; }
+        } else {
+          try { return <InlineMath key={index} math={mathStr} />; }
+          catch (e) { return <span key={index} style={{fontFamily:'monospace', color:'#f87171'}}>{seg.math}</span>; }
         }
       }
-      return <span key={index}>{seg.content}</span>;
+      
+      let textStr = seg.content;
+      // Strip formatting commands from plain text so they don't render literally
+      textStr = textStr.replace(/\\textbf\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\textit\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\underline\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+      
+      const lines = textStr.split('\\\\');
+      if (lines.length > 1) {
+        return (
+          <span key={index}>
+            {lines.map((line, lIdx) => (
+              <span key={lIdx}>
+                {line}
+                {lIdx < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </span>
+        );
+      }
+      return <span key={index}>{textStr}</span>;
     });
   };
 

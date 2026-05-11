@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Image as ImageIcon, Copy } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
-
+import Tesseract from 'tesseract.js';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // Unicode → LaTeX mapping
@@ -97,112 +97,111 @@ function parseLatexTemplate(text) {
   const lines = text.split('\n');
 
   let currentQuestion = null;
-  let currentOptions = [];
   let inOptions = false;
-  let answerKey = '';
   let imageRefs = [];
-
-  // Question pattern: \item or Q1. or Question 1
-  const qPattern = /^\\item\s*(.*)|^(?:Q|Question)\s*(\d+)[.)]\s*(.*)/i;
-  // Option pattern: \item or (1) or 1.
-  const optPattern = /^\\item\s*|^\s*\((\d+)\)\s*|^\s*(\d+)[.)]\s*/;
-  // Answer key pattern
-  const ansPattern = /MathonGo Answer Key\s*:\s*\(?(\d+)\)?/i;
-  // Image reference pattern
-  const imgPattern = /images\/Q(\d+)\.png|images\/(\d+[a-d])\.png/;
+  let optionIndex = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Check for image references anywhere
-    const imgMatch = line.match(imgPattern);
+    // Check for images
+    const imgMatch = line.match(/images\/(Q\d+|\d+[a-d])\.png/i);
     if (imgMatch) {
-      if (imgMatch[1]) imageRefs.push({ qNum: parseInt(imgMatch[1]), type: 'question' });
-      else if (imgMatch[2]) imageRefs.push({ ref: imgMatch[2], type: 'option' });
+      if (imgMatch[1].startsWith('Q')) {
+        imageRefs.push({ qNum: parseInt(imgMatch[1].substring(1)), type: 'question' });
+      } else {
+        imageRefs.push({ ref: imgMatch[1], type: 'option' });
+      }
     }
 
-    // Check for answer key
-    const ansMatch = line.match(ansPattern);
-    if (ansMatch && currentQuestion) {
-      answerKey = ansMatch[1];
-      currentQuestion.correctOption = answerKey;
-      continue;
-    }
-
-    // Check for question start
-    const qMatch = line.match(qPattern);
-    if (qMatch) {
-      // Save previous question
+    // Question start: \item Let ... or \item The ... inside the main enumerate
+    if (line.startsWith('\\item') && !inOptions) {
       if (currentQuestion) {
-        currentQuestion.options = currentOptions;
         questions.push(currentQuestion);
       }
-
-      // Start new question
-      const qText = qMatch[1] || qMatch[3] || '';
       currentQuestion = {
         questionNumber: questions.length + 1,
-        text: qText.replace(/\$\$/g, '').replace(/\$/g, '').trim(),
+        text: line.substring(5).trim().replace(/\s+$/, ''),
         options: [],
         correctOption: '',
         needsScreenshot: false,
         type: 'single_correct'
       };
-      currentOptions = [];
-      inOptions = false;
-      answerKey = '';
       continue;
     }
 
-    // Check for options
-    if (currentQuestion && !inOptions) {
-      // Check if this looks like an option
-      if (line.match(/^\s*\(?\d+\)|\s*^\s*[a-d][.)]|\s*^\s*\\begin\{enumerate\}/i)) {
-        inOptions = true;
-      }
+    // Options begin
+    if (line.includes('\\begin{enumerate}') && currentQuestion) {
+      inOptions = true;
+      optionIndex = 0;
+      continue;
     }
 
-    if (inOptions && currentQuestion) {
-      // Check for end of options (next question or non-option text)
-      if (line.match(/^\\item\s*$|^(?:Q|Question)\s*\d+/) || (!line.match(/^\s*\(?\d+\)|^\s*[a-d][.)]/) && line.length > 10 && !line.match(/\\begin\{/))) {
-        inOptions = false;
-        if (currentQuestion) {
-          currentQuestion.options = currentOptions;
-        }
-      } else if (line.match(/^\s*\((\d+)\)\s*(.*)/)) {
-        const optMatch = line.match(/^\s*\((\d+)\)\s*(.*)/);
-        const optId = optMatch[1] === '1' ? 'A' : optMatch[1] === '2' ? 'B' : optMatch[1] === '3' ? 'C' : optMatch[1] === '4' ? 'D' : optMatch[1];
-        currentOptions.push({ id: optId, text: optMatch[2].trim(), needsScreenshot: false });
-      } else if (line.match(/^\s*([a-d])[.)]\s*(.*)/i)) {
-        const optMatch = line.match(/^\s*([a-d])[.)]\s*(.*)/i);
-        currentOptions.push({ id: optMatch[1].toUpperCase(), text: optMatch[2].trim(), needsScreenshot: false });
-      } else if (currentOptions.length > 0 && line.length > 2) {
-        // Append to last option
-        currentOptions[currentOptions.length - 1].text += ' ' + line;
-      }
+    // Option item
+    if (inOptions && line.startsWith('\\item') && currentQuestion) {
+      const optionLetters = ['A', 'B', 'C', 'D'];
+      const optId = optionIndex < 4 ? optionLetters[optionIndex] : 'E';
+      currentQuestion.options.push({
+        id: optId,
+        text: line.substring(5).trim(),
+        needsScreenshot: false
+      });
+      optionIndex++;
+      continue;
     }
 
-    // If no question started yet, try to find question number in text
-    if (!currentQuestion && line.length > 5) {
-      const numMatch = line.match(/\b(\d{1,2})\b/);
-      if (numMatch && parseInt(numMatch[1]) >= 1 && parseInt(numMatch[1]) <= 75) {
-        currentQuestion = {
-          questionNumber: parseInt(numMatch[1]),
-          text: line.replace(/\b\d{1,2}\b/, '').trim(),
-          options: [],
-          correctOption: '',
-          needsScreenshot: false,
-          type: 'single_correct'
-        };
+    // Options end
+    if (inOptions && line.includes('\\end{enumerate}')) {
+      inOptions = false;
+      continue;
+    }
+
+    // Answer Key
+    const ansMatch = line.match(/MathonGo Answer Key\s*:\s*\(?(\d+)\)?/i);
+    if (ansMatch && currentQuestion) {
+      // Map 1 -> A, 2 -> B, etc. if it's single correct. If it's a number without brackets, or numerical
+      let ans = ansMatch[1];
+      if (line.includes('(') && line.includes(')')) {
+        const optionLetters = ['A', 'B', 'C', 'D'];
+        ans = optionLetters[parseInt(ans) - 1] || ans;
+      }
+      currentQuestion.correctOption = ans;
+      continue;
+    }
+
+    // Append to text or option
+    if (currentQuestion) {
+      if (inOptions && currentQuestion.options.length > 0) {
+        currentQuestion.options[currentQuestion.options.length - 1].text += '\n' + line;
+      } else if (!inOptions && !line.startsWith('\\textbf{MathonGo Answer Key')) {
+        currentQuestion.text += '\n' + line;
       }
     }
   }
 
-  // Save last question
   if (currentQuestion) {
-    currentQuestion.options = currentOptions;
     questions.push(currentQuestion);
+  }
+
+  // Handle images setting needsScreenshot
+  for (const ref of imageRefs) {
+    if (ref.type === 'question') {
+      const q = questions.find(q => q.questionNumber === ref.qNum);
+      if (q) q.needsScreenshot = true;
+    } else if (ref.type === 'option') {
+      // ref.ref looks like "37a"
+      const match = ref.ref.match(/(\d+)([a-d])/);
+      if (match) {
+        const qNum = parseInt(match[1]);
+        const optLetter = match[2].toUpperCase();
+        const q = questions.find(q => q.questionNumber === qNum);
+        if (q) {
+          const opt = q.options.find(o => o.id === optLetter);
+          if (opt) opt.needsScreenshot = true;
+        }
+      }
+    }
   }
 
   return { questions, imageRefs };
@@ -458,10 +457,10 @@ Return a strict JSON object with:
 {
   "percentiles": [array of numbers, e.g. 99, 98.5, 98],
   "tests": [
-     { "name": "Column Header Name", "marks": [array of marks corresponding to the percentiles] }
+     { "name": "Exact Header Name (e.g. '2 April Morning')", "marks": [array of marks corresponding to the percentiles] }
   ]
 }
-Ensure the order of marks perfectly matches the order of the percentiles.`;
+You must extract the EXACT headers written above each column (e.g. "2 April Morning", "4 April Evening") and set them as the "name" for that column's data in the "tests" array. Ensure the order of marks perfectly matches the order of the percentiles. Do not truncate data.`;
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ inlineData: { data: base64Data, mimeType: percentileFile.type } }, { text: prompt }] }],
@@ -589,55 +588,171 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
 
   const renderTextWithMath = (text) => {
     if (!text) return null;
+    
+    let processedText = text;
+    // Remove unsupported formatting wrappers
+    processedText = processedText.replace(/\\begin\{center\}/g, '');
+    processedText = processedText.replace(/\\end\{center\}/g, '');
+    processedText = processedText.replace(/\\renewcommand\{\\arraystretch\}\{[^{}]*\}/g, '');
+    
+    // Replace tabular with array for KaTeX support
+    processedText = processedText.replace(/\\begin\{tabular\}/g, '\\begin{array}');
+    processedText = processedText.replace(/\\end\{tabular\}/g, '\\end{array}');
+    
+    // Replace align* with aligned for KaTeX support inside block math
+    processedText = processedText.replace(/\\begin\{align\*\}/g, '\\begin{aligned}');
+    processedText = processedText.replace(/\\end\{align\*\}/g, '\\end{aligned}');
+    processedText = processedText.replace(/\\begin\{align\}/g, '\\begin{aligned}');
+    processedText = processedText.replace(/\\end\{align\}/g, '\\end{aligned}');
+
+    // Strip $ from INSIDE environments that are already math mode
+    const envs = ['aligned', 'array', 'bmatrix', 'pmatrix', 'matrix', 'cases', 'vmatrix', 'Vmatrix'];
+    const envRegex = new RegExp(`(\\\\begin\\{(?:${envs.join('|')})\\}(?:\\{[^}]*\\})?)([\\s\\S]*?)(\\\\end\\{(?:${envs.join('|')})\\})`, 'g');
+    processedText = processedText.replace(envRegex, (match, p1, p2, p3) => {
+      return p1 + p2.replace(/\\\$|\$/g, '') + p3;
+    });
+
+    // Remove unsupported graphic/spacing commands
+    processedText = processedText.replace(/\\rule\{[^}]*\}\{[^}]*\}/g, '_______');
+    processedText = processedText.replace(/\\vspace\{[^}]*\}/g, '');
+    processedText = processedText.replace(/\\includegraphics(?:\[[^\]]*\])?\{[^}]*\}/g, '');
 
     const segments = [];
-    let remaining = text;
-
-    const displayParts = remaining.split(/(\$\$[\s\S]*?\$\$)/g);
-
-    for (const dp of displayParts) {
-      if (dp.startsWith('$$') && dp.endsWith('$$')) {
-        segments.push({ type: 'display', math: dp.slice(2, -2).trim() });
+    
+    // Regex to match block math, environments, and inline math
+    const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\begin\{[a-zA-Z*]+\}(?:\{[^}]*\})?[\s\S]*?\\end\{[a-zA-Z*]+\}|\$[^$]+?\$|\\\([\s\S]*?\\\))/g;
+    
+    const parts = processedText.split(mathRegex);
+    
+    for (const part of parts) {
+      if (!part) continue;
+      
+      if (part.startsWith('$$') && part.endsWith('$$')) {
+        segments.push({ type: 'display', math: part.slice(2, -2).trim() });
+      } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
+        segments.push({ type: 'display', math: part.slice(2, -2).trim() });
+      } else if (part.startsWith('\\begin{')) {
+        segments.push({ type: 'display', math: part.trim() });
+      } else if (part.startsWith('$') && part.endsWith('$')) {
+        segments.push({ type: 'inline', math: part.slice(1, -1).trim() });
+      } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
+        segments.push({ type: 'inline', math: part.slice(2, -2).trim() });
       } else {
-        const inlineParts = dp.split(/(\$[^$]+?\$)/g);
-        for (const ip of inlineParts) {
-          if (ip.startsWith('$') && ip.endsWith('$') && ip.length > 2) {
-            segments.push({ type: 'inline', math: ip.slice(1, -1).trim() });
-          } else if (ip) {
-            segments.push({ type: 'text', content: ip });
-          }
-        }
+        segments.push({ type: 'text', content: part });
       }
     }
-
+    
     return segments.map((seg, index) => {
-      if (seg.type === 'display') {
-        try {
-          return <BlockMath key={index} math={seg.math} />;
-        } catch (e) {
-          return <span key={index} style={{color:'#f87171',fontFamily:'monospace'}}>{"$$" + seg.math + "$$"}</span>;
-        }
-      } else if (seg.type === 'inline') {
-        try {
-          return <InlineMath key={index} math={seg.math} />;
-        } catch (e) {
-          return <span key={index} style={{color:'#f87171',fontFamily:'monospace'}}>{"$" + seg.math + "$"}</span>;
+      if (seg.type === 'display' || seg.type === 'inline') {
+        let mathStr = seg.math;
+        // Convert text formatting to math formatting to prevent KaTeX errors with nested math
+        mathStr = mathStr.replace(/\\textbf\s*\{/g, '\\mathbf{');
+        mathStr = mathStr.replace(/\\textit\s*\{/g, '\\mathit{');
+        
+        if (seg.type === 'display') {
+          try { return <BlockMath key={index} math={mathStr} />; }
+          catch (e) { return <span key={index} style={{fontFamily:'monospace', color:'#f87171'}}>{seg.math}</span>; }
+        } else {
+          try { return <InlineMath key={index} math={mathStr} />; }
+          catch (e) { return <span key={index} style={{fontFamily:'monospace', color:'#f87171'}}>{seg.math}</span>; }
         }
       }
-      return <span key={index}>{seg.content}</span>;
+      
+      let textStr = seg.content;
+      // Strip formatting commands from plain text so they don't render literally
+      textStr = textStr.replace(/\\textbf\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\textit\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\underline\s*\{([^{}]*)\}/g, '$1');
+      textStr = textStr.replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+      
+      const lines = textStr.split('\\\\');
+      if (lines.length > 1) {
+        return (
+          <span key={index}>
+            {lines.map((line, lIdx) => (
+              <span key={lIdx}>
+                {line}
+                {lIdx < lines.length - 1 && <br />}
+              </span>
+            ))}
+          </span>
+        );
+      }
+      return <span key={index}>{textStr}</span>;
     });
   };
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <RefreshCw size={28} color="#c084fc" />
-          AI Test Generator II (Local Parser)
-        </h1>
-        <p style={{ color: 'var(--dash-text-muted)' }}>
-          Upload a PDF or template file (.txt). The local parser will structure 75 questions. Use the API only for percentile extraction.
-        </p>
+      <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <RefreshCw size={28} color="#c084fc" />
+            AI Test Generator II (Offline Model)
+          </h1>
+          <p style={{ color: 'var(--dash-text-muted)', maxWidth: '800px' }}>
+            Upload both a PDF and its corresponding data text file simultaneously. The local parser will perfectly set the paper with 99.99% accuracy offline. The system then uses Gemini Vision to perfectly extract your Marks vs Percentile table image with precise headers.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            const promptText = `Role: You are an expert academic data extractor and advanced LaTeX typesetter.
+
+Task: I am providing a PDF of a JEE Main question paper containing exactly 75 questions. Your objective is to extract the entire paper and convert it into a single, flawless master LaTeX (.tex) document intended for a mock practice test.
+
+CRITICAL INSTRUCTIONS & CONSTRAINTS:
+
+1. Absolute Fidelity (Zero Mistakes): This document will be used for actual student practice. You must not skip, summarize, or alter any text, mathematical sign, subscript, superscript, variable, or given information under any circumstance. Accuracy is your highest priority.
+
+2. Complete Extraction: All 75 questions must be present in the final LaTeX output, strictly maintaining their original numbering.
+
+3. Strict Question Formatting by Type:
+
+Multiple Choice Questions (MCQs): Questions 1 to 20, 26 to 45, and 51 to 70. You must extract and format all 4 options for these using a standard enumerate or tasks environment.
+
+Numerical Value Questions (NVQs): Questions 21 to 25, 46 to 50, and 71 to 75. These require numerical/integer answers. Do not create, format, or expect options for these specific questions.
+
+4. Advanced Image & Diagram Tracking:
+Since you cannot extract images directly, you must establish an organized tracking system within the LaTeX code for me to follow later:
+
+Question Images: If a question contains a diagram, graph, circuit, or the entire question is an image, insert a placeholder: \\includegraphics[width=0.5\\textwidth]{images/Q35.png}.
+
+Option Images: If the options are images/structures, strictly use the naming convention <question_number><option_letter>. For example, for Question 35's options, use placeholders: \\includegraphics{images/35a.png}, \\includegraphics{images/35b.png}, \\includegraphics{images/35c.png}, and \\includegraphics{images/35d.png}.
+
+The Image Ledger: At the very top of the LaTeX document (commented out), you must generate a comprehensive "Image Requirements Record" listing every single filename (e.g., Q32.png, 61a.png, 61b.png) that I need to manually screenshot and put into the images/ folder.
+
+5. Flawless LaTeX Math Rendering:
+
+Use standard, robust packages (amsmath, amssymb, graphicx).
+
+Ensure all mathematical variables, equations, and chemical formulas are properly enclosed. Use $ for inline math and $$ or \\[ \\] for block/display math.
+
+Avoid deprecated commands; ensure the syntax is clean so it compiles without throwing compilation errors on standard LaTeX engines (pdfLaTeX/XeLaTeX).
+
+Please output ONLY the raw LaTeX code enclosed in a code block so I can easily copy it into my editor. Begin!`;
+            navigator.clipboard.writeText(promptText);
+            alert("Prompt copied to clipboard!");
+          }}
+          style={{
+            marginTop: '15px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            color: '#60a5fa',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: 'bold',
+            transition: 'all 0.2s'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.2)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; }}
+        >
+          <Copy size={16} /> Copy AI Prompt
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: generatedTest ? '350px 1fr' : '1fr 1fr', gap: '30px', transition: 'all 0.3s' }}>
@@ -689,7 +804,7 @@ Ensure the order of marks perfectly matches the order of the percentiles.`;
           </div>
 
           <div style={{ textAlign: 'center', marginBottom: '20px', color: 'var(--dash-text-muted)', fontSize: '0.85rem' }}>
-            — OR —
+            — AND / OR —
           </div>
 
           {/* PDF File Input */}
