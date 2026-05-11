@@ -54,7 +54,7 @@ function convertUnicodeToLatex(text) {
       i++;
     }
   }
-  return result.replace(/\$\s*\$/g, ' ');
+  return result;
 }
 
 async function extractTextFromPDF(file) {
