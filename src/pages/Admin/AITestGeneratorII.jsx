@@ -92,7 +92,12 @@ async function extractTextFromPDF(file) {
 }
 
 // Parse LaTeX/template format with answer keys
-function parseLatexTemplate(text) {
+function parseLatexTemplate(rawText) {
+  // Pre-process: convert unicode math symbols to LaTeX equivalents
+  let text = convertUnicodeToLatex(rawText);
+  // Strip LaTeX comments (% ...) but NOT escaped \%
+  text = text.replace(/(?<!\\)%[^\n]*/g, '');
+  
   const questions = [];
   const lines = text.split('\n');
 
@@ -805,40 +810,40 @@ You must extract the EXACT headers written above each column (e.g. "2 April Morn
         </div>
         <button
           onClick={() => {
-            const promptText = `Role: You are an expert academic data extractor and advanced LaTeX typesetter.
+            const promptText = `Role: You are an expert academic data extractor and LaTeX typesetter.
 
-Task: I am providing a PDF of a JEE Main question paper containing exactly 75 questions. Your objective is to extract the entire paper and convert it into a single, flawless master LaTeX (.tex) document intended for a mock practice test.
+Task: Extract ALL 75 questions from the attached JEE Main PDF and produce a single, flawless .tex document.
 
-CRITICAL INSTRUCTIONS & CONSTRAINTS:
+STRICT FORMAT RULES (FOLLOW EXACTLY):
 
-1. Absolute Fidelity (Zero Mistakes): This document will be used for actual student practice. You must not skip, summarize, or alter any text, mathematical sign, subscript, superscript, variable, or given information under any circumstance. Accuracy is your highest priority.
+1. STRUCTURE:
+- Use \\begin{enumerate} with \\item for each question (1-75)
+- MCQ options: nested \\begin{enumerate}[label=(\\arabic*)] with \\item for each option
+- After each question's options, add: \\textbf{MathonGo Answer Key : (X)} where X is 1-4
+- For numerical questions (21-25, 46-50, 71-75): NO options, just \\textbf{MathonGo Answer Key : N}
 
-2. Complete Extraction: All 75 questions must be present in the final LaTeX output, strictly maintaining their original numbering.
+2. MATH FORMATTING (CRITICAL - DO NOT VIOLATE):
+- ALL math expressions MUST be wrapped in $...$ (inline) or $$...$$ (display)
+- ALWAYS use curly braces: $\\frac{a}{b}$, $\\mathbb{R}$, $\\sqrt{x}$, $\\sum_{i=1}^{n}$
+- NEVER use unicode symbols (², ³, α, →, etc.) - use LaTeX commands ($^2$, $^3$, $\\alpha$, $\\to$)
+- NEVER omit $ delimiters around ANY math content
+- Variables like x, y, f(x) MUST be in $...$: Let $f : \\mathbb{R} \\to \\mathbb{R}$
 
-3. Strict Question Formatting by Type:
+3. EXAMPLE OF CORRECT FORMAT:
+\\item Let $f : \\mathbb{R} \\to \\mathbb{R}$ be defined as $f(x) = \\frac{2x^2 - 3x + 2}{3x^2 + x + 3}$. Then $f$ is :
+\\begin{enumerate}[label=(\\arabic*), itemsep=0pt]
+    \\item both one-one and onto
+    \\item one-one but not onto
+    \\item onto but not one-one
+    \\item neither one-one nor onto
+\\end{enumerate}
+\\textbf{MathonGo Answer Key : (4)}
 
-Multiple Choice Questions (MCQs): Questions 1 to 20, 26 to 45, and 51 to 70. You must extract and format all 4 options for these using a standard enumerate or tasks environment.
+4. IMAGES: Use \\includegraphics[width=0.5\\textwidth]{images/Q<num>.png} for question diagrams, and {images/<num>a.png} etc. for option images. List all image filenames in a comment block at the top.
 
-Numerical Value Questions (NVQs): Questions 21 to 25, 46 to 50, and 71 to 75. These require numerical/integer answers. Do not create, format, or expect options for these specific questions.
+5. SECTIONS: Q1-20 Math MCQ, Q21-25 Math Numerical, Q26-45 Physics MCQ, Q46-50 Physics Numerical, Q51-70 Chemistry MCQ, Q71-75 Chemistry Numerical.
 
-4. Advanced Image & Diagram Tracking:
-Since you cannot extract images directly, you must establish an organized tracking system within the LaTeX code for me to follow later:
-
-Question Images: If a question contains a diagram, graph, circuit, or the entire question is an image, insert a placeholder: \\includegraphics[width=0.5\\textwidth]{images/Q35.png}.
-
-Option Images: If the options are images/structures, strictly use the naming convention <question_number><option_letter>. For example, for Question 35's options, use placeholders: \\includegraphics{images/35a.png}, \\includegraphics{images/35b.png}, \\includegraphics{images/35c.png}, and \\includegraphics{images/35d.png}.
-
-The Image Ledger: At the very top of the LaTeX document (commented out), you must generate a comprehensive "Image Requirements Record" listing every single filename (e.g., Q32.png, 61a.png, 61b.png) that I need to manually screenshot and put into the images/ folder.
-
-5. Flawless LaTeX Math Rendering:
-
-Use standard, robust packages (amsmath, amssymb, graphicx).
-
-Ensure all mathematical variables, equations, and chemical formulas are properly enclosed. Use $ for inline math and $$ or \\[ \\] for block/display math.
-
-Avoid deprecated commands; ensure the syntax is clean so it compiles without throwing compilation errors on standard LaTeX engines (pdfLaTeX/XeLaTeX).
-
-Please output ONLY the raw LaTeX code enclosed in a code block so I can easily copy it into my editor. Begin!`;
+Output ONLY the raw LaTeX code. Begin!`;
             navigator.clipboard.writeText(promptText);
             alert("Prompt copied to clipboard!");
           }}
