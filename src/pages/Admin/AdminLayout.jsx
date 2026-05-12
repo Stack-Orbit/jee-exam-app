@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileSignature, LogOut, Wand2 } from 'lucide-react';
+import { LayoutDashboard, Users, FileSignature, LogOut, Wand2, Settings } from 'lucide-react';
 import '../../dashboard.css';
 
 function AdminLayout() {
@@ -16,6 +16,7 @@ function AdminLayout() {
     { name: 'Accounts', path: '/admin/accounts', icon: <Users size={20} /> },
     { name: 'AI Test Generator', path: '/admin/ai-generator', icon: <FileSignature size={20} /> },
     { name: 'AI Test Generator II', path: '/admin/ai-generator-2', icon: <Wand2 size={20} /> },
+    { name: 'Edit Tests', path: '/admin/edit-tests', icon: <Settings size={20} /> },
   ];
 
   return (

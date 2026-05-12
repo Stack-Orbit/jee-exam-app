@@ -1,12 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Image as ImageIcon, Copy } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, RefreshCw, Image as ImageIcon, Copy, Key } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // Unicode → LaTeX mapping
 const UNICODE_TO_LATEX = {
@@ -97,6 +93,10 @@ function parseLatexTemplate(rawText) {
   let text = convertUnicodeToLatex(rawText);
   // Strip LaTeX comments (% ...) but NOT escaped \%
   text = text.replace(/(?<!\\)%[^\n]*/g, '');
+  // Normalize escaped underscores: \_ \_ \_ \_ or \_\_\_\_ → solid underline
+  text = text.replace(/(\\_ *){2,}/g, '____________');
+  // Also handle \_\_\_\_\_\_ patterns (contiguous escaped underscores)
+  text = text.replace(/(\\_)+/g, (m) => '____________');
   
   const questions = [];
   const lines = text.split('\n');
@@ -110,6 +110,11 @@ function parseLatexTemplate(rawText) {
     const line = lines[i].trim();
     if (!line) continue;
 
+    // Skip document preamble lines
+    if (line.startsWith('\\documentclass') || line.startsWith('\\usepackage') || 
+        line.startsWith('\\begin{document}') || line.startsWith('\\end{document}') ||
+        line.startsWith('\\end{enumerate}') && !inOptions) continue;
+
     // Check for images
     const imgMatch = line.match(/images\/(Q\d+|\d+[a-d])\.png/i);
     if (imgMatch) {
@@ -120,7 +125,7 @@ function parseLatexTemplate(rawText) {
       }
     }
 
-    // Question start: \item Let ... or \item The ... inside the main enumerate
+    // Question start: \item ... inside the main enumerate (not inside options)
     if (line.startsWith('\\item') && !inOptions) {
       if (currentQuestion) {
         questions.push(currentQuestion);
@@ -162,17 +167,21 @@ function parseLatexTemplate(rawText) {
       continue;
     }
 
-    // Answer Key
-    const ansMatch = line.match(/MathonGo Answer Key\s*:\s*\(?(\d+)\)?/i);
-    if (ansMatch && currentQuestion) {
-      // Map 1 -> A, 2 -> B, etc. if it's single correct. If it's a number without brackets, or numerical
-      let ans = ansMatch[1];
-      if (line.includes('(') && line.includes(')')) {
+    // Answer Key — handles both MCQ: "\textbf{MathonGo Answer Key : (1)}" and Numerical: "\textbf{MathonGo Answer Key : 117}"
+    // The line from template looks like: \textbf{MathonGo Answer Key : (3)} or \textbf{MathonGo Answer Key : 19}
+    const ansMatchMCQ = line.match(/MathonGo Answer Key\s*:\s*\((\d+)\)/i);
+    const ansMatchNum = line.match(/MathonGo Answer Key\s*:\s*(-?[\d.]+)\s*\}?\s*$/i);
+    if (currentQuestion) {
+      if (ansMatchMCQ) {
+        // MCQ answer: (1) → A, (2) → B, (3) → C, (4) → D
         const optionLetters = ['A', 'B', 'C', 'D'];
-        ans = optionLetters[parseInt(ans) - 1] || ans;
+        currentQuestion.correctOption = optionLetters[parseInt(ansMatchMCQ[1]) - 1] || ansMatchMCQ[1];
+        continue;
+      } else if (ansMatchNum && !ansMatchMCQ) {
+        // Numerical answer: bare number like 117, 30, 273
+        currentQuestion.correctOption = ansMatchNum[1];
+        continue;
       }
-      currentQuestion.correctOption = ans;
-      continue;
     }
 
     // Append to text or option
@@ -195,7 +204,6 @@ function parseLatexTemplate(rawText) {
       const q = questions.find(q => q.questionNumber === ref.qNum);
       if (q) q.needsScreenshot = true;
     } else if (ref.type === 'option') {
-      // ref.ref looks like "37a"
       const match = ref.ref.match(/(\d+)([a-d])/);
       if (match) {
         const qNum = parseInt(match[1]);
@@ -375,17 +383,15 @@ function parseJEEPaper(text) {
 }
 
 function AITestGeneratorII() {
-  const [file, setFile] = useState(null);
-  const [templateFile, setTemplateFile] = useState(null);
+  const [templateText, setTemplateText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const apiKey = 'AIzaSyAA_0U_t7k61MkTMRvZPnmc7KNRQHLITnY';
+  const [apiKey, setApiKey] = useState('');
+  const [testName, setTestName] = useState('');
   const [generatedTest, setGeneratedTest] = useState(null);
   const [progress, setProgress] = useState('');
   const [timer, setTimer] = useState(0);
   const [reviewDone, setReviewDone] = useState(false);
-  const fileInputRef = useRef(null);
-  const templateInputRef = useRef(null);
 
   const [percentileFile, setPercentileFile] = useState(null);
   const [isProcessingPercentile, setIsProcessingPercentile] = useState(false);
@@ -404,28 +410,6 @@ function AITestGeneratorII() {
     } else { setTimer(0); }
     return () => clearInterval(interval);
   }, [loading]);
-
-  const handleFileChange = (e) => {
-    const selected = e.target.files[0];
-    if (selected && (selected.type === 'application/pdf' || selected.type === 'text/plain' || selected.name.endsWith('.txt'))) {
-      setFile(selected);
-      setError('');
-    } else {
-      setError('Please select a valid PDF or text file.');
-      setFile(null);
-    }
-  };
-
-  const handleTemplateChange = (e) => {
-    const selected = e.target.files[0];
-    if (selected && (selected.type === 'text/plain' || selected.name.endsWith('.txt'))) {
-      setTemplateFile(selected);
-      setError('');
-    } else {
-      setError('Please select a valid template file (.txt).');
-      setTemplateFile(null);
-    }
-  };
 
   const fileToBase64 = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -451,7 +435,7 @@ function AITestGeneratorII() {
   };
 
   const processPercentileImage = async () => {
-    if (!apiKey) { setError('Please provide an API Key.'); return; }
+    if (!apiKey) { setError('Please provide an API Key at the top first.'); return; }
     setIsProcessingPercentile(true);
     setError('');
     try {
@@ -480,7 +464,7 @@ You must extract the EXACT headers written above each column (e.g. "2 April Morn
   };
 
   const handleGenerate = async () => {
-    if (!file && !templateFile) { setError('Please upload a PDF or template file first.'); return; }
+    if (!templateText.trim()) { setError('Please paste the template text first.'); return; }
 
     setLoading(true);
     setError('');
@@ -488,72 +472,47 @@ You must extract the EXACT headers written above each column (e.g. "2 April Morn
     setReviewDone(false);
 
     try {
-      let finalJSON;
+      setProgress('Parsing template text...');
+      const parsed = parseLatexTemplate(templateText);
 
-      // If template file is provided, use it directly
-      if (templateFile) {
-        setProgress('Reading template file...');
-        const templateText = await templateFile.text();
+      if (parsed.questions.length >= 50) {
+        setProgress('Processing template data...');
 
-        // Try to parse as LaTeX template first
-        const parsed = parseLatexTemplate(templateText);
+        const sectionsMap = {};
+        parsed.questions.forEach((q, idx) => {
+          const qNum = idx + 1;
+          let sectionName = 'General Section';
+          let qType = 'single_correct';
 
-        if (parsed.questions.length >= 50) {
-          // Successfully parsed from template
-          setProgress('Processing template data...');
+          if (qNum >= 1 && qNum <= 20) { sectionName = 'Mathematics Section 1'; }
+          else if (qNum >= 21 && qNum <= 25) { sectionName = 'Mathematics Section 2'; qType = 'numerical'; }
+          else if (qNum >= 26 && qNum <= 45) { sectionName = 'Physics Section 1'; }
+          else if (qNum >= 46 && qNum <= 50) { sectionName = 'Physics Section 2'; qType = 'numerical'; }
+          else if (qNum >= 51 && qNum <= 70) { sectionName = 'Chemistry Section 1'; }
+          else if (qNum >= 71 && qNum <= 75) { sectionName = 'Chemistry Section 2'; qType = 'numerical'; }
 
-          // Build sections from parsed questions
-          const sectionsMap = {};
-          parsed.questions.forEach((q, idx) => {
-            const qNum = idx + 1;
-            let sectionName = 'General Section';
-            let qType = 'single_correct';
+          q.sectionName = sectionName;
+          q.type = qType;
+          if (qType === 'numerical') q.options = [];
 
-            if (qNum >= 1 && qNum <= 20) { sectionName = 'Mathematics Section 1'; }
-            else if (qNum >= 21 && qNum <= 25) { sectionName = 'Mathematics Section 2'; qType = 'numerical'; }
-            else if (qNum >= 26 && qNum <= 45) { sectionName = 'Physics Section 1'; }
-            else if (qNum >= 46 && qNum <= 50) { sectionName = 'Physics Section 2'; qType = 'numerical'; }
-            else if (qNum >= 51 && qNum <= 70) { sectionName = 'Chemistry Section 1'; }
-            else if (qNum >= 71 && qNum <= 75) { sectionName = 'Chemistry Section 2'; qType = 'numerical'; }
+          if (!sectionsMap[sectionName]) sectionsMap[sectionName] = { sectionName, questions: [] };
+          sectionsMap[sectionName].questions.push(q);
+        });
 
-            q.sectionName = sectionName;
-            q.type = qType;
-            if (qType === 'numerical') q.options = [];
-
-            if (!sectionsMap[sectionName]) sectionsMap[sectionName] = { sectionName, questions: [] };
-            sectionsMap[sectionName].questions.push(q);
-          });
-
-          finalJSON = {
-            testName: templateFile.name.replace(/\.(txt|tex)$/i, ''),
-            sections: Object.values(sectionsMap)
-          };
-        } else {
-          throw new Error('Could not parse enough questions from template. Please check the format.');
-        }
-      }
-      // Otherwise use PDF extraction
-      else {
-        setProgress('Extracting text from PDF pages...');
-        const extractedText = await extractTextFromPDF(file);
-        console.log('Extracted text:', extractedText.length, 'chars. Preview:', extractedText.substring(0, 500));
-
-        setProgress('Structuring questions from extracted text (local parser)...');
-        const parsed = parseJEEPaper(extractedText);
-
-        finalJSON = {
-          testName: file.name.replace('.pdf', ''),
-          ...parsed
+        const finalJSON = {
+          testName: testName.trim() || 'AI Custom Test',
+          sections: Object.values(sectionsMap)
         };
-      }
 
-      // Add percentile mapping if confirmed
-      if (confirmedPercentileMapping) {
-        finalJSON.percentileMapping = confirmedPercentileMapping;
-      }
+        if (confirmedPercentileMapping) {
+          finalJSON.percentileMapping = confirmedPercentileMapping;
+        }
 
-      setGeneratedTest(finalJSON);
-      setProgress('Complete! Ready for review.');
+        setGeneratedTest(finalJSON);
+        setProgress('Complete! ' + parsed.questions.length + ' questions parsed. Ready for review.');
+      } else {
+        throw new Error('Could not parse enough questions (' + parsed.questions.length + ' found, need 50+). Please check the template format.');
+      }
     } catch (err) {
       console.error(err);
       setError(err.message || 'Failed to generate test.');
@@ -869,102 +828,72 @@ Output ONLY the raw LaTeX code. Begin!`;
         </button>
       </div>
 
+      {/* API Key Input */}
+      <div style={{ backgroundColor: apiKey ? 'rgba(34, 197, 94, 0.08)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${apiKey ? '#22c55e' : '#f59e0b'}`, padding: '15px', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+        <Key size={24} color={apiKey ? '#22c55e' : '#f59e0b'} />
+        <div style={{ flex: 1 }}>
+          <h4 style={{ margin: '0 0 5px 0', color: apiKey ? '#22c55e' : '#f59e0b' }}>{apiKey ? 'API Key Set' : 'API Key Required (for Percentile Extraction)'}</h4>
+          <input 
+            type="password" 
+            placeholder="Paste your Gemini API Key here" 
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            style={{ width: '100%', maxWidth: '400px', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white' }}
+          />
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: generatedTest ? '350px 1fr' : '1fr 1fr', gap: '30px', transition: 'all 0.3s' }}>
         <div style={{ backgroundColor: 'var(--dash-surface)', padding: '30px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', height: '800px', overflowY: 'auto' }}>
           <h2 style={{ fontSize: '1.2rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Upload size={20} /> Upload Files
+            <FileText size={20} /> Paste Template Text
           </h2>
 
-          {/* Template File Input */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--dash-text-muted)' }}>
-              Template File (.txt) - Recommended
+          {/* Test Name Input */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem', color: 'var(--dash-text-muted)', fontWeight: 'bold' }}>
+              Test Name
             </label>
-            <div
-              onClick={() => templateInputRef.current.click()}
-              style={{
-                border: '2px dashed rgba(255,255,255,0.2)', borderRadius: '12px', padding: '20px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', backgroundColor: templateFile ? 'rgba(16, 185, 129, 0.05)' : 'transparent',
-                transition: 'all 0.3s'
-              }}
-            >
-              <input
-                type="file"
-                accept=".txt,text/plain"
-                ref={templateInputRef}
-                onChange={handleTemplateChange}
-                style={{ display: 'none' }}
-              />
-              {templateFile ? (
-                <>
-                  <FileText size={32} color="#10b981" style={{ marginBottom: '10px' }} />
-                  <h3 style={{ margin: '0 0 5px 0', fontSize: '0.95rem', textAlign: 'center' }}>{templateFile.name}</h3>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setTemplateFile(null); }}
-                    style={{ marginTop: '8px', padding: '4px 10px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                  >
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <>
-                  <FileText size={32} color="var(--dash-text-muted)" style={{ marginBottom: '10px' }} />
-                  <h3 style={{ margin: '0 0 5px 0', fontSize: '0.9rem' }}>Click to select template</h3>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--dash-text-muted)' }}>LaTeX format with answer keys</p>
-                </>
-              )}
-            </div>
+            <input
+              type="text"
+              placeholder="e.g. JEE Main 2026 - 28 Jan Morning"
+              value={testName}
+              onChange={(e) => setTestName(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', backgroundColor: 'rgba(0,0,0,0.2)', color: 'white', fontSize: '0.95rem' }}
+            />
           </div>
 
-          <div style={{ textAlign: 'center', marginBottom: '20px', color: 'var(--dash-text-muted)', fontSize: '0.85rem' }}>
-            — AND / OR —
-          </div>
-
-          {/* PDF File Input */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--dash-text-muted)' }}>
-              PDF File (Direct extraction)
+          {/* Template Text Area */}
+          <div style={{ marginBottom: '15px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem', color: 'var(--dash-text-muted)', fontWeight: 'bold' }}>
+              Template File Text (LaTeX format with answer keys)
             </label>
-            <div
-              onClick={() => fileInputRef.current.click()}
+            <textarea
+              placeholder={"Paste the full LaTeX template text here...\n\nExample:\n\\item If the first term of an A.P. is $3$...\n\\begin{enumerate}[label=(\\arabic*)]\n    \\item $-1080$\n    ...\n\\end{enumerate}\n\\textbf{MathonGo Answer Key : (1)}"}
+              value={templateText}
+              onChange={(e) => setTemplateText(e.target.value)}
               style={{
-                border: '2px dashed rgba(255,255,255,0.2)', borderRadius: '12px', padding: '20px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', backgroundColor: file ? 'rgba(59, 130, 246, 0.05)' : 'transparent',
-                transition: 'all 0.3s'
+                flex: 1, minHeight: '250px', width: '100%', padding: '12px', borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.15)', backgroundColor: 'rgba(0,0,0,0.25)',
+                color: 'white', fontSize: '0.85rem', fontFamily: 'monospace', resize: 'vertical',
+                lineHeight: '1.5'
               }}
-            >
-              <input
-                type="file"
-                accept="application/pdf"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-              />
-              {file ? (
-                <>
-                  <FileText size={32} color="#60a5fa" style={{ marginBottom: '10px' }} />
-                  <h3 style={{ margin: '0 0 5px 0', fontSize: '0.95rem', textAlign: 'center' }}>{file.name}</h3>
-                  <p style={{ color: 'var(--dash-text-muted)', margin: 0, fontSize: '0.8rem' }}>{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                    style={{ marginTop: '8px', padding: '4px 10px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                  >
-                    Remove
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Upload size={32} color="var(--dash-text-muted)" style={{ marginBottom: '10px' }} />
-                  <h3 style={{ margin: '0 0 5px 0', fontSize: '0.9rem' }}>Click to select PDF</h3>
-                </>
+            />
+            <div style={{ marginTop: '6px', fontSize: '0.75rem', color: 'var(--dash-text-muted)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{templateText.length > 0 ? `${templateText.split('\n').length} lines pasted` : 'No text pasted yet'}</span>
+              {templateText.length > 0 && (
+                <button
+                  onClick={() => setTemplateText('')}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem' }}
+                >
+                  Clear Text
+                </button>
               )}
             </div>
           </div>
 
           {error && (
-            <div style={{ marginTop: '20px', padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <AlertCircle size={20} />
               {error}
             </div>
@@ -972,12 +901,12 @@ Output ONLY the raw LaTeX code. Begin!`;
 
           <button
             onClick={handleGenerate}
-            disabled={(!file && !templateFile) || loading}
+            disabled={!templateText.trim() || loading}
             style={{
-              marginTop: '20px', padding: '16px', borderRadius: '12px',
-              backgroundColor: (!file && !templateFile) || loading ? 'rgba(255,255,255,0.1)' : '#c084fc',
-              color: (!file && !templateFile) || loading ? 'var(--dash-text-muted)' : 'white',
-              border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: (!file && !templateFile) || loading ? 'not-allowed' : 'pointer',
+              marginTop: '15px', padding: '16px', borderRadius: '12px',
+              backgroundColor: !templateText.trim() || loading ? 'rgba(255,255,255,0.1)' : '#c084fc',
+              color: !templateText.trim() || loading ? 'var(--dash-text-muted)' : 'white',
+              border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: !templateText.trim() || loading ? 'not-allowed' : 'pointer',
               display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px',
               transition: 'all 0.3s'
             }}
@@ -1238,24 +1167,41 @@ Output ONLY the raw LaTeX code. Begin!`;
             <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {!reviewDone ? (
                 <button
-                  onClick={() => setReviewDone(true)}
+                  onClick={() => {
+                    setReviewDone(true);
+                    window.alert('✅ Review finalized!\n\nYou can now click the "Save Test (Private)" button that appeared below to publish the test.');
+                  }}
                   style={{ width: '100%', padding: '16px', borderRadius: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer' }}
                 >
                   Done Reviewing & Adding Images
                 </button>
               ) : (
-                <button
-                  onClick={() => {
-                    const savedTests = JSON.parse(localStorage.getItem('jee_ai_tests') || '[]');
-                    const testWithId = { ...generatedTest, id: Date.now(), createdAt: new Date().toISOString() };
-                    savedTests.push(testWithId);
-                    localStorage.setItem('jee_ai_tests', JSON.stringify(savedTests));
-                    alert('Test finalized and successfully published to the Student Dashboard!');
-                  }}
-                  style={{ width: '100%', padding: '16px', borderRadius: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)' }}
-                >
-                  <CheckCircle size={24} /> Yes, Finalize & Publish for All Students
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      const savedTests = JSON.parse(localStorage.getItem('jee_ai_tests') || '[]');
+                      const finalTest = { ...generatedTest };
+                      // Attach percentile mapping at save time (in case it was added after generation)
+                      if (confirmedPercentileMapping) {
+                        finalTest.percentileMapping = confirmedPercentileMapping;
+                      }
+                      // Use the latest test name from the input field
+                      if (testName.trim()) {
+                        finalTest.testName = testName.trim();
+                      }
+                      const testWithId = { ...finalTest, id: Date.now(), createdAt: new Date().toISOString(), isPublic: false };
+                      savedTests.push(testWithId);
+                      localStorage.setItem('jee_ai_tests', JSON.stringify(savedTests));
+                      alert('✅ Test saved as Private!\n\nNavigate to "Edit Tests" in the sidebar to review, edit, and make it Public for students.');
+                    }}
+                    style={{ width: '100%', padding: '16px', borderRadius: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)' }}
+                  >
+                    <CheckCircle size={24} /> Save Test (Private)
+                  </button>
+                  <p style={{ textAlign: 'center', color: 'var(--dash-text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                    Test will be saved as Private. Use the <strong>Edit Tests</strong> menu to make it Public.
+                  </p>
+                </>
               )}
             </div>
           )}

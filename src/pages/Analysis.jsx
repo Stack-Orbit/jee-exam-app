@@ -310,6 +310,7 @@ function renderSingleAnalysis(testData, resultData, navigate) {
 
   let predictedPercentileDisplay = "N/A";
   let percentileSubtext = "Based on basic estimation";
+  let percentileIsWorkHard = false;
 
   if (testData?.percentileMapping?.percentiles && testData?.percentileMapping?.marks) {
       const pts = testData.percentileMapping.percentiles;
@@ -320,30 +321,57 @@ function renderSingleAnalysis(testData, resultData, navigate) {
           .sort((a,b) => a.mark - b.mark);
       
       if (dataPoints.length > 0) {
-          if (dataPoints[0].mark > 0) {
-              dataPoints.unshift({ pct: Math.max(0, dataPoints[0].pct - 20), mark: 0 }); // rough estimate for 0 marks
-          }
-          if (dataPoints[dataPoints.length - 1].mark < 300) {
-              dataPoints.push({ pct: 100, mark: 300 });
-          }
+          // Find the 99 percentile threshold and 90 percentile threshold
+          const sorted99 = [...dataPoints].sort((a,b) => b.pct - a.pct);
+          const pct99Entry = sorted99.find(d => d.pct >= 99);
+          const pct90Entry = sorted99.find(d => d.pct >= 90 && d.pct < 91) || sorted99[sorted99.length - 1];
+          const lowestPercentileEntry = sorted99[sorted99.length - 1]; // lowest percentile in the table
 
-          let lower = dataPoints[0];
-          let upper = dataPoints[dataPoints.length - 1];
-          for (let i = 0; i < dataPoints.length - 1; i++) {
-              if (totalMarks >= dataPoints[i].mark && totalMarks <= dataPoints[i+1].mark) {
-                  lower = dataPoints[i];
-                  upper = dataPoints[i+1];
-                  break;
+          // Check if score exceeds the 99 percentile threshold
+          if (pct99Entry && totalMarks >= pct99Entry.mark) {
+              predictedPercentileDisplay = "99+";
+              percentileSubtext = `Score exceeds ${pct99Entry.mark} marks (99 %ile threshold)`;
+          }
+          // Check if score is below the lowest percentile in the table (below ~90)
+          else if (totalMarks < dataPoints[0].mark) {
+              predictedPercentileDisplay = "Work Hard!";
+              percentileSubtext = `Score below ${dataPoints[0].mark} marks (${dataPoints[0].pct} %ile)`;
+              percentileIsWorkHard = true;
+          }
+          else {
+              // Piecewise linear interpolation between adjacent data points
+              let lower = dataPoints[0];
+              let upper = dataPoints[dataPoints.length - 1];
+              for (let i = 0; i < dataPoints.length - 1; i++) {
+                  if (totalMarks >= dataPoints[i].mark && totalMarks <= dataPoints[i+1].mark) {
+                      lower = dataPoints[i];
+                      upper = dataPoints[i+1];
+                      break;
+                  }
+              }
+              if (totalMarks > dataPoints[dataPoints.length - 1].mark) {
+                  // Score exceeds all data points — extrapolate towards 99+
+                  predictedPercentileDisplay = "99+";
+                  percentileSubtext = `Score exceeds all mapped thresholds`;
+              } else if (lower.mark === upper.mark) {
+                  predictedPercentileDisplay = lower.pct.toFixed(2) + " %ile";
+              } else {
+                  const ratio = (totalMarks - lower.mark) / (upper.mark - lower.mark);
+                  const interp = lower.pct + ratio * (upper.pct - lower.pct);
+                  const clampedPercentile = Math.min(99, Math.max(0, interp));
+                  // If interpolated below 90, show Work Hard!
+                  if (clampedPercentile < 90) {
+                      predictedPercentileDisplay = "Work Hard!";
+                      percentileSubtext = `Estimated ~${clampedPercentile.toFixed(1)} %ile — keep pushing!`;
+                      percentileIsWorkHard = true;
+                  } else {
+                      predictedPercentileDisplay = clampedPercentile.toFixed(2) + " %ile";
+                  }
+              }
+              if (!percentileIsWorkHard && predictedPercentileDisplay !== "99+") {
+                  percentileSubtext = `Based on: ${testData.percentileMapping.mappingName}`;
               }
           }
-          if (lower.mark === upper.mark) {
-              predictedPercentileDisplay = lower.pct.toFixed(2) + " %ile";
-          } else {
-              const ratio = (totalMarks - lower.mark) / (upper.mark - lower.mark);
-              const interp = lower.pct + ratio * (upper.pct - lower.pct);
-              predictedPercentileDisplay = Math.min(100, Math.max(0, interp)).toFixed(2) + " %ile";
-          }
-          percentileSubtext = `Based on: ${testData.percentileMapping.mappingName}`;
       } else {
           predictedPercentileDisplay = Math.min(99.9, Math.max(40, (totalMarks / 300) * 100 + 40)).toFixed(1) + " %ile";
       }
@@ -403,7 +431,13 @@ function renderSingleAnalysis(testData, resultData, navigate) {
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                       Predicted Percentile
                   </div>
-                  <div className={`font-extrabold font-mono bg-gradient-to-r from-violet-700 via-blue-700 to-cyan-700 dark:from-violet-400 dark:via-blue-400 dark:to-cyan-400 bg-clip-text text-transparent glow-text ${isLongText ? 'text-xl leading-tight mt-1' : 'text-4xl'}`}>{predictedPercentileDisplay}</div>
+                  {percentileIsWorkHard ? (
+                    <div className="text-2xl font-extrabold text-rose-500 dark:text-rose-400 glow-text mt-1">{predictedPercentileDisplay}</div>
+                  ) : predictedPercentileDisplay === "99+" ? (
+                    <div className="text-4xl font-extrabold font-mono bg-gradient-to-r from-emerald-500 via-green-400 to-teal-500 bg-clip-text text-transparent glow-text">{predictedPercentileDisplay}</div>
+                  ) : (
+                    <div className={`font-extrabold font-mono bg-gradient-to-r from-violet-700 via-blue-700 to-cyan-700 dark:from-violet-400 dark:via-blue-400 dark:to-cyan-400 bg-clip-text text-transparent glow-text ${isLongText ? 'text-xl leading-tight mt-1' : 'text-4xl'}`}>{predictedPercentileDisplay}</div>
+                  )}
                   <div className="text-[10px] mt-1 font-bold text-violet-600 dark:text-violet-400/70">{percentileSubtext}</div>
               </div>
           </div>

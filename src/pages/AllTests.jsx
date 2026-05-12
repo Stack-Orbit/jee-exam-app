@@ -8,8 +8,8 @@ function AllTests() {
   const [papers, setPapers] = useState([]);
 
   useEffect(() => {
-    // Load AI Generated papers from local storage
-    const aiTests = JSON.parse(localStorage.getItem('jee_ai_tests') || '[]');
+    // Load AI Generated papers from local storage - only show public tests
+    const aiTests = JSON.parse(localStorage.getItem('jee_ai_tests') || '[]').filter(t => t.isPublic !== false);
     
     const formattedAiTests = aiTests.map(test => {
       const totalQuestions = test.sections ? test.sections.reduce((acc, sec) => acc + (sec.questions?.length || 0), 0) : 
